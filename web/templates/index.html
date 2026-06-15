@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Live Network Dashboard</title>
+
+    <style>
+        body { font-family: Arial; margin: 20px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; }
+        th { background: #f2f2f2; }
+    </style>
+</head>
+
+<body>
+
+<h1>Live Network Devices</h1>
+
+<h2 id="count">Devices: {get_all_devices|length}</h2>
+
+<table>
+    <thead>
+        <tr>
+            <th>IP</th>
+            <th>MAC</th>
+            <th>Manufacturer</th>
+            <th>Last Seen</th>
+        </tr>
+    </thead>
+
+    <tbody id="deviceTable"></tbody>
+</table>
+
+<script>
+
+async function loadDevices() {
+    const response = await fetch('/api/devices');
+    const devices = await response.json();
+
+    console.log(devices);
+
+    let rows = ""; // ✅ MUST be outside loop
+
+    devices.forEach(d => {
+        console.log("row:", d);
+
+        rows += `
+            <tr>
+                <td>${d[0] ?? d.ip ?? ""}</td>
+                <td>${d[1] ?? d.mac ?? ""}</td>
+                <td>${d[2] ?? d.manufacturer ?? ""}</td>
+                <td>${d[3] ?? d.last_seen ?? ""}</td>
+            </tr>
+        `;
+    });
+
+    document.getElementById("deviceTable").innerHTML = rows;
+}
+
+// first load
+loadDevices();
+
+// live updates every 2 seconds
+setInterval(loadDevices, 2000);
+
+</script>
+
+</body>
+</html>
