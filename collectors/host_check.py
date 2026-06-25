@@ -1,6 +1,8 @@
 from ping3 import ping, verbose_ping
 import time
 
+from utils.Lauto_detect import get_ip_address
+
 def check_inet_status(host):
     response_time = ping(host)
 
@@ -11,7 +13,10 @@ def check_inet_status(host):
 
 
 if __name__ == "__main__":
-    host = input("Enter host (e.g. google.com): ")
+    host = get_ip_address('wlo1')
+    print(f"Local IP address detected: {host}")
+    if host is None:
+        print("Could not detect local IP address. Please check your network interface.")
 
     while True:
         check_inet_status(host)

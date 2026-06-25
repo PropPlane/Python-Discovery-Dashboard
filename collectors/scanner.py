@@ -9,7 +9,18 @@ def scan_network(host):
     ether = Ether(dst="ff:ff:ff:ff:ff:ff")
     packet = ether / arp
 
-    result = srp(packet, timeout=2, verbose=0)[0]
+    try:
+        result = srp(packet, timeout=2, verbose=0)[0]
+    except PermissionError as e:
+        raise PermissionError(
+            "Raw socket access denied. Run this script with elevated privileges "
+            "(sudo) or grant cap_net_raw+eip to the Python interpreter."
+        ) from e
+    except OSError as e:
+        raise RuntimeError(
+            "Failed to create a raw socket. Ensure you have permission to use Scapy "
+            "and that the network interface is available."
+        ) from e
 
     devices = []
     for sent, received in result:

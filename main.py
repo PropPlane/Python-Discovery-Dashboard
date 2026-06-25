@@ -2,7 +2,9 @@ from collectors.scanner import scan_network
 from ping3 import ping
 import time
 import threading
+import sys
 from database.db import init_db, save_devices, get_all_devices 
+from utils.Lauto_detect import get_ip_address
 from utils.mac import mac_to_manufacturer
 from web.app import app
 
@@ -34,7 +36,8 @@ def check_device(ip):
 
 
 if __name__ == "__main__":
-    host = input("Enter host (e.g. 192.168.1.1): ")
+    host = get_ip_address('wlo1')
+    print(f"Local IP address detected: {host}")
 
     init_db()
 
@@ -42,7 +45,16 @@ if __name__ == "__main__":
     while True:
         print("\nScanning network...\n")
 
-        devices = scan_network(host)
+        try:
+            devices = scan_network(host)
+        except PermissionError as e:
+            print("ERROR:", e)
+            print("Run with elevated permissions: sudo .venv/bin/python main.py")
+            sys.exit(1)
+        except RuntimeError as e:
+            print("ERROR:", e)
+            sys.exit(1)
+
         devices = [(ip, mac, mac_to_manufacturer(mac)) for ip, mac in devices]
         if devices:
             save_devices(devices)
