@@ -1,4 +1,6 @@
 import psutil
+import socket
+
 
 def get_ip_address(interface):
     try:
@@ -7,10 +9,11 @@ def get_ip_address(interface):
     except (KeyError, IndexError):
         return None
 
-# Show available interfaces
-addrs = psutil.net_if_addrs()
-print("Available interfaces:")
-for interface, addr_list in addrs.items():
-    print(f"  {interface}: {[a.address for a in addr_list]}")
 
-print(f"\nIP address of wlo1: {get_ip_address('wlo1')}")
+def detect_interface():
+    addrs = psutil.net_if_addrs()
+    for name, iface_addrs in addrs.items():
+        for addr in iface_addrs:
+            if addr.family == socket.AF_INET and not addr.address.startswith("127."):
+                return name, addr.address
+    return None, None

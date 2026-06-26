@@ -4,7 +4,7 @@ import time
 import threading
 import sys
 from database.db import init_db, save_devices, get_all_devices 
-from utils.Lauto_detect import get_ip_address
+from utils.Lauto_detect import detect_interface
 from utils.mac import mac_to_manufacturer
 from web.app import app
 
@@ -34,11 +34,16 @@ def check_device(ip):
     else:
         print(f"[OFFLINE] {ip}")
 
+#checking the local IP address of the device
+
 
 if __name__ == "__main__":
-    host = get_ip_address('wlo1')
-    print(f"Local IP address detected: {host}")
-
+    iface, host = detect_interface()
+    if host is None:
+        host = input("Could not detect local IP address. Please enter your local IP address (e.g., 192.168.1.1): ")
+    
+    
+#auto check end
     init_db()
 
 
