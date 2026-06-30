@@ -12,6 +12,7 @@ def init_db():
     cur.execute("""
     CREATE TABLE IF NOT EXISTS logs (
         ip TEXT PRIMARY KEY,
+        status TEXT,
         mac TEXT,
         manufacturer TEXT,
         last_seen TEXT
@@ -26,15 +27,23 @@ def save_devices(devices):
     con = sqlite3.connect(DB_PATH)
     cur = con.cursor()
 
+    # Get list of current IPs from scan
+    current_ips = [ip for _, ip, _, _ in devices]
+    
+    # Mark devices not in current scan as OFFLINE (but keep the row)
+    if current_ips:
+        placeholders = ",".join("?" * len(current_ips))
+        cur.execute(f"UPDATE logs SET status='OFFLINE' WHERE ip NOT IN ({placeholders})", current_ips)
+
     last_seen = datetime.now().isoformat()
 
-    for ip, mac, manufacturer in devices:
+    for status, ip, mac, manufacturer in devices:
         cur.execute("""
-            INSERT INTO logs (ip, mac, manufacturer, last_seen) VALUES (?, ?, ?, ?)
+            INSERT INTO logs (status, ip, mac, manufacturer, last_seen) VALUES (?, ?, ?, ?, ?)
 
             ON CONFLICT(ip) 
-            DO UPDATE SET mac=excluded.mac, manufacturer=excluded.manufacturer, last_seen=excluded.last_seen
-            """, (ip, mac, manufacturer, last_seen)
+            DO UPDATE SET status=excluded.status, mac=excluded.mac, manufacturer=excluded.manufacturer, last_seen=excluded.last_seen
+            """, (status, ip, mac, manufacturer, last_seen)
         )
 
     con.commit()

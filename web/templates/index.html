@@ -7,7 +7,7 @@
         body { font-family: Arial; margin: 20px; }
         table { border-collapse: collapse; width: 100%; }
         th, td { border: 1px solid #ddd; padding: 8px; }
-        th { background: #f2f2f2; }
+        th { background: #5c5858; }
     </style>
 </head>
 
@@ -15,12 +15,13 @@
 
 <h1>Live Network Devices</h1>
 
-<h2 id="count">Devices: {get_all_devices|length}</h2>
+<h2 id="count">Devices: 0</h2>
 
 <table>
     <thead>
         <tr>
             <th>IP</th>
+            <th>Status</th>
             <th>MAC</th>
             <th>Manufacturer</th>
             <th>Last Seen</th>
@@ -45,15 +46,17 @@ async function loadDevices() {
 
         rows += `
             <tr>
-                <td>${d[0] ?? d.ip ?? ""}</td>
-                <td>${d[1] ?? d.mac ?? ""}</td>
-                <td>${d[2] ?? d.manufacturer ?? ""}</td>
-                <td>${d[3] ?? d.last_seen ?? ""}</td>
+                <td>${d[0] ?? d.status ?? ""}</td>
+                <td>${d[1] ?? d.ip ?? ""}</td>
+                <td>${d[2] ?? d.mac ?? ""}</td>
+                <td>${d[3] ?? d.manufacturer ?? ""}</td>
+                <td>${d[4] ?? d.last_seen ?? ""}</td>
             </tr>
         `;
     });
 
     document.getElementById("deviceTable").innerHTML = rows;
+    document.getElementById("count").innerText = `Devices: ${devices.length}`;
 }
 
 // first load

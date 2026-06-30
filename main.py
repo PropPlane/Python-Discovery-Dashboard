@@ -7,7 +7,7 @@ from database.db import init_db, save_devices, get_all_devices
 from utils.Lauto_detect import detect_interface
 from utils.mac import mac_to_manufacturer
 from web.app import app
-
+from utils.status import check_internet, check_device
 # Run Flask in a separate thread
 flask_thread = threading.Thread(target=lambda: app.run(host="0.0.0.0", port=5000, use_reloader=False), daemon=True)
 flask_thread.start()
@@ -15,24 +15,7 @@ flask_thread.start()
 time.sleep(1)  # Give Flask time to start before prompting for input
 
 
-def check_internet(host="8.8.8.8"):
-    response = ping(host, timeout=2)
 
-    if response is not None:
-        print(f"[INTERNET UP] {host} - {response*1000:.2f} ms")
-        return True
-
-    print(f"[INTERNET DOWN] {host}")
-    return False
-
-
-def check_device(ip):
-    response = ping(ip, timeout=1)
-
-    if response is not None:
-        print(f"[ONLINE] {ip} - {response*1000:.2f} ms")
-    else:
-        print(f"[OFFLINE] {ip}")
 
 #checking the local IP address of the device
 
@@ -60,7 +43,12 @@ if __name__ == "__main__":
             print("ERROR:", e)
             sys.exit(1)
 
-        devices = [(ip, mac, mac_to_manufacturer(mac)) for ip, mac in devices]
+        devices = scan_network(host)
+        devices = [(check_device(ip), ip, mac, mac_to_manufacturer(mac)) for ip, mac in devices]
+
+        print(f"Devices from scan: {devices}")
+        print(f"Device IPs: {[ip for _, ip, _, _ in devices]}")
+
         if devices:
             save_devices(devices)
 
@@ -68,8 +56,7 @@ if __name__ == "__main__":
 
         internet_ok = check_internet()
 
-        for ip, mac, manufacturer in devices:
+        for status, ip, mac, manufacturer in devices:
             print(f"{ip} -> {mac} ({manufacturer})")
-            check_device(ip)
 
         time.sleep(10)

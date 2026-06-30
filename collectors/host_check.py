@@ -10,6 +10,7 @@ def check_inet_status(host):
         print(f"{host} is online. Response time: {response_time:.2f} ms")
     else:
         print(f"{host} is offline.")
+        time.sleep(.1)
 
 
 if __name__ == "__main__":
@@ -20,4 +21,4 @@ if __name__ == "__main__":
 
     while True:
         check_inet_status(host)
-        time.sleep(.5)
+        time.sleep(.1)
