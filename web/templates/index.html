@@ -32,39 +32,52 @@
 </table>
 
 <script>
+    const deviceTable = document.getElementById("deviceTable");
+    const countEl = document.getElementById("count");
 
-async function loadDevices() {
-    const response = await fetch('/api/devices');
-    const devices = await response.json();
+    function renderDevices(devices) {
+        let rows = "";
 
-    console.log(devices);
+        devices.forEach((device) => {
+            const [status, ip, mac, manufacturer, lastSeen] = device;
 
-    let rows = ""; 
+            rows += `
+                <tr>
+                    <td>${ip ?? ""}</td>
+                    <td>${status ?? ""}</td>
+                    <td>${mac ?? ""}</td>
+                    <td>${manufacturer ?? ""}</td>
+                    <td>${lastSeen ?? ""}</td>
+                </tr>
+            `;
+        });
 
-    devices.forEach(d => {
-        console.log("row:", d);
+        deviceTable.innerHTML = rows;
+        countEl.innerText = `Devices: ${devices.length}`;
+    }
 
-        rows += `
-            <tr>
-                <td>${d[0] ?? d.status ?? ""}</td>
-                <td>${d[1] ?? d.ip ?? ""}</td>
-                <td>${d[2] ?? d.mac ?? ""}</td>
-                <td>${d[3] ?? d.manufacturer ?? ""}</td>
-                <td>${d[4] ?? d.last_seen ?? ""}</td>
-            </tr>
-        `;
+    async function loadDevices() {
+        const response = await fetch('/api/devices');
+        const devices = await response.json();
+        renderDevices(devices);
+    }
+
+    const eventSource = new EventSource('/api/live');
+
+    eventSource.addEventListener('update', (event) => {
+        try {
+            const devices = JSON.parse(event.data);
+            renderDevices(devices);
+        } catch (error) {
+            console.error('Failed to parse SSE payload:', error);
+        }
     });
 
-    document.getElementById("deviceTable").innerHTML = rows;
-    document.getElementById("count").innerText = `Devices: ${devices.length}`;
-}
+    eventSource.onerror = () => {
+        console.error('SSE connection lost');
+    };
 
-// first load
-loadDevices();
-
-// live updates every 2 seconds
-setInterval(loadDevices, 2000);
-
+    loadDevices();
 </script>
 
 </body>
