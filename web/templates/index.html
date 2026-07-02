@@ -2,82 +2,624 @@
 <html>
 <head>
     <title>Live Network Dashboard</title>
-
     <style>
-        body { font-family: Arial; margin: 20px; }
-        table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid #ddd; padding: 8px; }
-        th { background: #5c5858; }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f7f8fb;
+            color: #2c2f33;
+        }
+
+        h1 {
+            margin-bottom: 12px;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: minmax(180px, auto) minmax(320px, 1fr) minmax(320px, 1fr);
+            gap: 20px;
+            margin-bottom: 24px;
+            align-items: start;
+        }
+
+        .summary-cards {
+            display: inline-flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: start;
+        }
+
+        .card,
+        .graph-card,
+        .table-card {
+            background: #ffffff;
+            border: 1px solid #dfe2e6;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(44, 47, 51, 0.06);
+            padding: 18px;
+        }
+
+        .card {
+            width: 100%;
+            min-width: 140px;
+            max-width: 220px;
+        }
+
+        .total-devices-card p {
+            margin: 0;
+            white-space: nowrap;
+        }
+
+        .card h3,
+        .graph-card h3,
+        .table-card h3 {
+            margin: 0 0 10px;
+            font-size: 1rem;
+            color: #3f444f;
+        }
+
+        .card p {
+            margin: 0;
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1f2328;
+            word-break: break-word;
+        }
+
+        .graph-card canvas {
+            width: 100% !important;
+            height: auto !important;
+        }
+
+        .device-status-card {
+            min-width: 0;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            background: #ffffff;
+        }
+
+        th,
+        td {
+            border: 1px solid #e2e5ea;
+            padding: 10px 12px;
+            text-align: left;
+        }
+
+        th {
+            background: #eef1f6;
+            color: #2c2f33;
+            font-weight: 700;
+        }
+
+        tbody tr:nth-child(even) {
+            background: #f9fbff;
+        }
+
+        .info-table {
+            margin-top: 20px;
+        }
+
+        .table-card {
+            overflow-x: auto;
+            background: #ffffff;
+            border: 1px solid #dfe2e6;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(44, 47, 51, 0.06);
+            padding: 18px;
+        }
+
+        .dashboard-bottom {
+            display: grid;
+            grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+            gap: 20px;
+            margin-top: 20px;
+            align-items: start;
+        }
+
+        .dashboard-bottom > * {
+            min-width: 0;
+        }
+
+        .dashboard-bottom .table-card {
+            padding: 16px;
+            overflow: hidden;
+        }
+
+        .dashboard-bottom .hidden-devices-card {
+            grid-column: 1 / -1;
+        }
+
+        .table-card table {
+            width: 100%;
+            table-layout: fixed;
+            border-collapse: collapse;
+            margin-top: 12px;
+        }
+
+        th,
+        td {
+            border: 1px solid #e2e5ea;
+            padding: 10px 12px;
+            text-align: left;
+            word-break: break-word;
+            white-space: normal;
+        }
+
+        .table-card h3,
+        .info-table h3,
+        .graph-card h3 {
+            margin-bottom: 16px;
+        }
+
+        .graph-card {
+            display: flex;
+            flex-direction: column;
+            min-height: 320px;
+            max-height: 520px;
+            background: #ffffff;
+            border: 1px solid #dfe2e6;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(44, 47, 51, 0.06);
+            padding: 18px;
+            overflow: hidden;
+        }
+
+        .hide-button,
+        .unhide-button,
+        .toggle-hidden-button {
+            padding: 6px 10px;
+            border: 1px solid #dfe2e6;
+            border-radius: 8px;
+            background: #f4f5f7;
+            color: #2c2f33;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .hide-button:hover,
+        .unhide-button:hover,
+        .toggle-hidden-button:hover {
+            background: #e8eaed;
+        }
+
+        .hidden-devices-card .hidden-content {
+            display: none;
+            margin-top: 16px;
+            overflow-x: auto;
+            max-height: 340px;
+        }
+
+        .hidden-devices-card.open .hidden-content {
+            display: block;
+        }
+
+        .hidden-devices-card .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .graph-card canvas {
+            width: 100% !important;
+            height: 100% !important;
+            flex: 1;
+            min-height: 260px !important;
+            max-height: 480px !important;
+        }
+
+        .info-table {
+            margin-top: 0;
+        }
+
+        .info-table table {
+            margin-top: 0;
+        }
     </style>
 </head>
-
 <body>
 
-<h1>Live Network Devices</h1>
+<h1>Live Network Dashboard</h1>
 
-<h2 id="count">Devices: 0</h2>
+<div class="dashboard">
+    <div class="summary-cards">
+        <div class="card total-devices-card">
+            <h3>Total Devices</h3>
+            <p id="count">0</p>
+        </div>
+        <div class="card" style="display:flex;align-items:center;justify-content:space-between;min-width:180px;">
+            <div>
+                <h3 style="margin:0 0 6px 0;font-size:0.95rem;">Packet Sniffer</h3>
+                <div id="snifferStatus" style="font-size:0.9rem;color:#58606a;">Unknown</div>
+            </div>
+            <div>
+                <button id="snifferToggle" class="sniffer-toggle-button">Toggle</button>
+            </div>
+        </div>
+    </div>
 
-<table>
-    <thead>
-        <tr>
-            <th>IP</th>
-            <th>Status</th>
-            <th>MAC</th>
-            <th>Manufacturer</th>
-            <th>Last Seen</th>
-        </tr>
-    </thead>
+    <div class="graph-card">
+        <h3>Packet Usage</h3>
+        <canvas id="packetUsageChart"></canvas>
+    </div>
 
-    <tbody id="deviceTable"></tbody>
-</table>
+    <div class="graph-card device-status-card">
+        <h3>Device Status</h3>
+        <canvas id="statusChart"></canvas>
+    </div>
+</div>
 
+<div class="dashboard-bottom">
+    <div class="table-card">
+        <h3>Live Device List</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>IP</th>
+                    <th>Status</th>
+                    <th>MAC</th>
+                    <th>Manufacturer</th>
+                    <th>Last Seen</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="deviceTable"></tbody>
+        </table>
+    </div>
+
+    <div class="table-card info-table">
+        <h3>Summary Metrics</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Metric</th>
+                    <th>Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Total Devices</td>
+                    <td id="summaryTotal">0</td>
+                </tr>
+                <tr>
+                    <td>Network Usage</td>
+                    <td id="networkUsage">0s</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="table-card hidden-devices-card" id="hiddenDevicesCard">
+        <div class="card-header">
+            <h3>Hidden Devices</h3>
+            <button class="toggle-hidden-button" id="toggleHiddenDevices">Show hidden devices</button>
+        </div>
+        <div class="hidden-content" id="hiddenDevicesContent">
+            <table>
+                <thead>
+                    <tr>
+                        <th>IP</th>
+                        <th>Status</th>
+                        <th>MAC</th>
+                        <th>Manufacturer</th>
+                        <th>Last Seen</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="hiddenDeviceTable"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<div style="margin:12px 0;padding:8px;background:#fff;border:1px solid #e2e5ea;border-radius:6px;">
+    <strong>SSE Debug:</strong>
+    <pre id="debugSSE" style="max-height:160px;overflow:auto;margin:8px 0;font-size:12px;color:#111;white-space:pre-wrap;word-break:break-word;max-width:100%;"></pre>
+</div>
 <script>
     const deviceTable = document.getElementById("deviceTable");
     const countEl = document.getElementById("count");
+    const summaryTotal = document.getElementById("summaryTotal");
+    const networkUsageEl = document.getElementById("networkUsage");
+
+    const packetUsageChartCtx = document.getElementById("packetUsageChart").getContext("2d");
+    const packetUsageChart = new Chart(packetUsageChartCtx, {
+        type: 'scatter',
+        data: {
+            datasets: [{
+                label: 'Packet usage',
+                data: [],
+                backgroundColor: '#3f51b5',
+            }],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    type: 'linear',
+                    title: { display: true, text: 'Time' },
+                    ticks: {
+                        callback: (value) => new Date(value).toLocaleTimeString(),
+                    },
+                },
+                y: {
+                    title: { display: true, text: 'Packets' },
+                    beginAtZero: true,
+                },
+            },
+            plugins: {
+                legend: { display: false },
+            },
+        },
+    });
+
+    const statusChartCtx = document.getElementById("statusChart").getContext("2d");
+    const statusChart = new Chart(statusChartCtx, {
+        type: "doughnut",
+        data: {
+            labels: ["Online", "Offline"],
+            datasets: [{
+                data: [0, 0],
+                backgroundColor: ["#4caf50", "#f44336"],
+                borderColor: ["#ffffff", "#ffffff"],
+                borderWidth: 2,
+            }],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: "bottom", labels: { boxWidth: 12, padding: 16 } },
+            },
+        },
+    });
 
     function renderDevices(devices) {
         let rows = "";
+        let online = 0;
+        let offline = 0;
 
         devices.forEach((device) => {
-            const [status, ip, mac, manufacturer, lastSeen] = device;
+            const status = (device.status || "").toString();
+            const ip = device.ip || "";
+            const mac = device.mac || "";
+            const manufacturer = device.manufacturer || "";
+            const lastSeen = device.last_seen || "";
+
+            if (status.toLowerCase().includes("online")) {
+                online += 1;
+            } else {
+                offline += 1;
+            }
 
             rows += `
                 <tr>
-                    <td>${ip ?? ""}</td>
-                    <td>${status ?? ""}</td>
-                    <td>${mac ?? ""}</td>
-                    <td>${manufacturer ?? ""}</td>
-                    <td>${lastSeen ?? ""}</td>
+                    <td>${ip}</td>
+                    <td>${status}</td>
+                    <td>${mac}</td>
+                    <td>${manufacturer}</td>
+                    <td>${lastSeen}</td>
+                    <td><button class="hide-button" data-ip="${ip}" data-hidden="0">Hide</button></td>
                 </tr>
             `;
         });
 
         deviceTable.innerHTML = rows;
-        countEl.innerText = `Devices: ${devices.length}`;
+        countEl.innerText = devices.length;
+        summaryTotal.innerText = devices.length;
+
+        statusChart.data.datasets[0].data = [online, offline];
+        statusChart.update();
+    }
+
+    function renderHiddenDevices(devices) {
+        const hiddenRows = devices.map((device) => {
+            const status = (device.status || "").toString();
+            const ip = device.ip || "";
+            const mac = device.mac || "";
+            const manufacturer = device.manufacturer || "";
+            const lastSeen = device.last_seen || "";
+            return `
+                <tr>
+                    <td>${ip}</td>
+                    <td>${status}</td>
+                    <td>${mac}</td>
+                    <td>${manufacturer}</td>
+                    <td>${lastSeen}</td>
+                    <td><button class="unhide-button" data-ip="${ip}">Unhide</button></td>
+                </tr>
+            `;
+        }).join("");
+
+        const hiddenDeviceTable = document.getElementById('hiddenDeviceTable');
+        if (hiddenDeviceTable) {
+            hiddenDeviceTable.innerHTML = hiddenRows;
+        }
     }
 
     async function loadDevices() {
         const response = await fetch('/api/devices');
         const devices = await response.json();
         renderDevices(devices);
+        await updateNetworkUsage();
+        await updatePacketUsage();
+        await loadHiddenDevices();
+    }
+
+    async function loadHiddenDevices() {
+        const response = await fetch('/api/devices?include_hidden=1');
+        const devices = await response.json();
+        const hiddenDevices = devices.filter((device) => device.hidden);
+        renderHiddenDevices(hiddenDevices);
+    }
+
+    function toggleHiddenContent() {
+        const card = document.getElementById('hiddenDevicesCard');
+        const content = document.getElementById('hiddenDevicesContent');
+        const button = document.getElementById('toggleHiddenDevices');
+
+        if (!card || !content || !button) {
+            return;
+        }
+
+        const isOpen = card.classList.toggle('open');
+        if (isOpen) {
+            button.innerText = 'Hide hidden devices';
+        } else {
+            button.innerText = 'Show hidden devices';
+        }
+    }
+
+    async function updatePacketUsage() {
+        const response = await fetch('/api/packet_usage');
+        const points = await response.json();
+        packetUsageChart.data.datasets[0].data = points;
+        packetUsageChart.update();
+    }
+
+    function formatDuration(seconds) {
+        const minutes = Math.floor(seconds / 60);
+        const hours = Math.floor(minutes / 60);
+        const remainingMinutes = minutes % 60;
+        const remainingSeconds = seconds % 60;
+
+        if (hours > 0) {
+            return `${hours}h ${remainingMinutes}m ${remainingSeconds}s`;
+        }
+        if (minutes > 0) {
+            return `${minutes}m ${remainingSeconds}s`;
+        }
+        return `${remainingSeconds}s`;
+    }
+
+    async function updateNetworkUsage() {
+        const response = await fetch('/api/network_usage');
+        const usage = await response.json();
+        const usageEl = document.getElementById('networkUsage');
+        if (usageEl) {
+            usageEl.innerText = formatDuration(usage.total_seconds);
+        }
+    }
+
+    // Sniffer control functions
+    async function fetchSnifferStatus() {
+        try {
+            const resp = await fetch('/api/sniffer/status');
+            const data = await resp.json();
+            updateSnifferUI(Boolean(data.enabled));
+        } catch (err) {
+            updateSnifferUI(false);
+        }
+    }
+
+    function updateSnifferUI(enabled) {
+        const statusEl = document.getElementById('snifferStatus');
+        const btn = document.getElementById('snifferToggle');
+        if (statusEl) statusEl.innerText = enabled ? 'Running' : 'Stopped';
+        if (btn) btn.innerText = enabled ? 'Stop' : 'Start';
+        if (enabled) btn.classList.add('active'); else btn.classList.remove('active');
+    }
+
+    async function toggleSniffer() {
+        const btn = document.getElementById('snifferToggle');
+        if (!btn) return;
+        const currentlyRunning = btn.innerText === 'Stop';
+        try {
+            const resp = await fetch('/api/sniffer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enable: !currentlyRunning }),
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                updateSnifferUI(Boolean(data.enabled));
+            }
+        } catch (err) {
+            console.error('Failed to toggle sniffer', err);
+        }
     }
 
     const eventSource = new EventSource('/api/live');
 
-    eventSource.addEventListener('update', (event) => {
+    function handleLiveEvent(event) {
         try {
             const devices = JSON.parse(event.data);
+            const dbg = document.getElementById('debugSSE');
+            if (dbg) {
+                const summary = `Received ${devices.length} device(s) at ${new Date().toLocaleTimeString()}`;
+                const preview = JSON.stringify(devices.slice(0, 4), null, 2);
+                dbg.textContent = `${summary}\n${preview}${devices.length > 4 ? '\n...more devices omitted...' : ''}`;
+            }
             renderDevices(devices);
+            updatePacketUsage();
+            updateNetworkUsage();
         } catch (error) {
             console.error('Failed to parse SSE payload:', error);
         }
-    });
+    }
+
+    eventSource.addEventListener('update', handleLiveEvent);
+
+    // Some servers may send unnamed (default) messages without an `event:` field.
+    // Listen for those too so the dashboard receives updates regardless of label.
+    eventSource.onmessage = handleLiveEvent;
 
     eventSource.onerror = () => {
         console.error('SSE connection lost');
     };
 
+    document.addEventListener('click', async (event) => {
+        const hideButton = event.target.closest('.hide-button');
+        if (hideButton) {
+            const ip = hideButton.dataset.ip;
+            if (!ip) return;
+
+            const response = await fetch('/api/device/hidden', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ip, hidden: true }),
+            });
+
+            if (response.ok) {
+                await loadDevices();
+            }
+            return;
+        }
+
+        const unhideButton = event.target.closest('.unhide-button');
+        if (unhideButton) {
+            const ip = unhideButton.dataset.ip;
+            if (!ip) return;
+
+            const response = await fetch('/api/device/hidden', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ip, hidden: false }),
+            });
+
+            if (response.ok) {
+                await loadDevices();
+            }
+            return;
+        }
+
+        const toggleButton = event.target.closest('.toggle-hidden-button');
+        if (toggleButton) {
+            toggleHiddenContent();
+            return;
+        }
+    });
+
     loadDevices();
+    // initialize sniffer status and wire toggle
+    fetchSnifferStatus();
+    const snBtn = document.getElementById('snifferToggle');
+    if (snBtn) snBtn.addEventListener('click', toggleSniffer);
 </script>
 
 </body>

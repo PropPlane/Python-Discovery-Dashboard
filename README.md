@@ -24,3 +24,32 @@ To start the program run the main.py file in the root folder:
 python main.py
 
 Open the dashboard at http://127.0.0.1:5000/
+
+### Packet sniffer (real packet counts)
+
+This project includes an optional Scapy-based packet sniffer to collect real packet counts for the dashboard. Capturing packets requires elevated privileges on Linux.
+
+- Easiest: run the program with sudo (recommended when testing):
+
+```bash
+sudo .venv/bin/python main.py
+```
+
+- Alternative: grant the Python binary CAP_NET_RAW and CAP_NET_ADMIN instead of running as root:
+
+```bash
+sudo setcap 'cap_net_raw,cap_net_admin+eip' /full/path/to/.venv/bin/python
+```
+
+- Quick REPL test for the sniffer:
+
+```python
+from utils.packet_sniffer import PacketSniffer
+ps = PacketSniffer(iface='eth0')  # or None for default
+ps.start()
+import time; time.sleep(5)
+print('packets seen:', ps.get_and_reset())
+ps.stop()
+```
+
+Note: Scapy must be installed (see `requirements.txt`). If Scapy is not available the sniffer runs in a no-op mode and the dashboard will show zero packet counts.
