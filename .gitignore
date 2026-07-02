@@ -1,5 +1,7 @@
 __pycache__/
 *.pyc
 database/logs.db
+.db
+database/device_archive.db
 .env
 .venv/
