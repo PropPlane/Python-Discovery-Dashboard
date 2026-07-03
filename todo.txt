@@ -1,0 +1,18 @@
+<<<This is the TODO list I will put features/bug fixes that need to get updated and/or features I wanna add.>>>
+
+Format: >>"FILE"
+            --objective1
+            --objective2
+            --etc
+                #Specific steps to accomplish goal
+                    
+
+            
+<<<TODO starts below here>>>
+
+    >>index.html, main.py
+        --Add a unique devices value replace the network useage value
+            
+
+    >>Python-Log-Analyzer
+        --Package the project
