@@ -1,4 +1,4 @@
 flask
 scapy
 ping3
-mac-to-vendor
+mac-vendor-lookup
