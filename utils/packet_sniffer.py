@@ -7,14 +7,14 @@ except Exception:
 
 
 class PacketSniffer:
-    """Background packet counter using Scapy.
+    #Background packet counter using Scapy.
 
-    Usage:
-        ps = PacketSniffer(iface='eth0')
-        ps.start()
+    #Usage:
+        #ps = PacketSniffer(iface='eth0')
+        #ps.start()
         # later: ps.get_and_reset()
-        ps.stop()
-    """
+        #ps.stop()
+    
 
     def __init__(self, iface=None):
         self.iface = iface

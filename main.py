@@ -8,10 +8,13 @@ from utils.import_utils import auto_import
 print_startup_text()
 module_startup_text(__file__)
 
+
+#File import output
 scan_network = auto_import("collectors.scanner").scan_network
 ping = auto_import("ping3").ping
 init_archive_db = auto_import("database.db").init_archive_db
 init_db = auto_import("database.db").init_db
+init_unique_db = auto_import("database.db").init_unique_db
 save_devices = auto_import("database.db").save_devices
 get_all_devices = auto_import("database.db").get_all_devices
 detect_interface = auto_import("utils.Lauto_detect").detect_interface
@@ -32,7 +35,7 @@ flask_thread.start()
 time.sleep(1)  # Give Flask time to start before prompting for input
 
 
-def run_scan_cycle(host, interval_seconds=10, packet_sniffer=None):
+def run_scan_cycle(host, interval_seconds=10, packet_sniffer=None): #This uses stuff from "collectors" and sets the flow for the network scans
     while True:
         print("\nScanning network...\n")
 
@@ -54,7 +57,7 @@ def run_scan_cycle(host, interval_seconds=10, packet_sniffer=None):
 
         devices = [(check_device(ip), ip, mac, mac_to_manufacturer(mac)) for ip, mac in devices]
 
-        print(f"Devices from scan: {devices}")
+        print(f"Devices from scan: {devices}") #Outputs devices to the terminal mainly used for debugging
         print(f"Device IPs: {[ip for _, ip, _, _ in devices]}")
 
         if devices:
@@ -84,16 +87,19 @@ def run_scan_cycle(host, interval_seconds=10, packet_sniffer=None):
         time.sleep(interval_seconds)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__": #This is where the program actually starts
     iface, host = detect_interface()
     if host is None:
-        host = input("Could not detect local IP address. Please enter your local IP address (e.g., 192.168.1.1): ")
+        host = input("Could not detect local IP address. Please enter your local IP address (e.g., 192.168.1.1): ") #If auto finding local network fails
 
-    init_db()
+    init_db()           #Database initation functions are called here
     init_archive_db()
+    init_unique_db()
+                        #
+                        #
 
-    scan_interval = 10
-    if len(sys.argv) > 1:
+    scan_interval = 10    #The scan interval defaults to 10s
+    if len(sys.argv) > 1: #Unless a number is entered beside like so "python main.py {num}"
         try:
             scan_interval = int(sys.argv[1])
         except ValueError:

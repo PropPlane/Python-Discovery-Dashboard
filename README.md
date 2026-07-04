@@ -14,7 +14,19 @@ When starting the program your network interface will be automatically detected.
 Python 3 or higher will be needed to run this project, the following are required dependencies: Flask, ping3 mac-vendor-lookup, scapy. These dependencies can be installed using: 
 
 ```python
-pip install Flask ping3 mac-vendor-lookup scapy psutil
+pip install flask, ping3, mac-vendor-lookup, scapy, psutil
+```
+
+It is needed to download the chart.js file locally in order to avoid loading errors when starting the program you can do so in the CLI by using:
+
+For Linux:
+```
+curl -o static/chart.js https://jsdelivr.net
+```
+
+Or for Windows:
+```
+Invoke-WebRequest -Uri "https://jsdelivr.net" -OutFile "static/chart.js"
 ```
 
 ### Usage

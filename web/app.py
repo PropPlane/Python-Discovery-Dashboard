@@ -1,5 +1,5 @@
 from flask import Flask, render_template, jsonify, Response, request
-from database.db import get_all_devices, get_network_usage, set_device_hidden
+from database.db import get_all_devices, get_total_logged_seconds, set_device_hidden
 from queue import Queue, Empty
 import time
 import json
@@ -7,29 +7,27 @@ from utils.packet_sniffer import get_global_sniffer
 
 app = Flask(__name__)
 
-# in-memory queue for pushing live scan updates from the scanner
+# In-memory queue for pushing live scan updates from the scanner
 live_queue = Queue()
 packet_usage_points = []
 
 
 def push_live_update(devices):
     """Push a list of device dicts to connected SSE clients.
-
-    The scanner thread can call this to deliver updates immediately
-    instead of waiting for the periodic DB poll.
-    """
+    The scanner thread can call this to deliver updates immediately."""
     try:
         live_queue.put(devices)
     except Exception:
-        # best-effort: swallow errors so scanner isn't blocked
+        # Best-effort: swallow errors so scanner isn't blocked
         pass
 
 
 def record_packet_usage(count):
-    timestamp = int(time.time() * 1000)
-    packet_usage_points.append({"x": timestamp, "y": count})
-    if len(packet_usage_points) > 50:
-        packet_usage_points.pop(0)
+    """Gets current unix time in milliseconds and saves the plot point position."""
+    timestamp = int(time.time() * 1000)     
+    packet_usage_points.append({"x": timestamp, "y": count})    
+    if len(packet_usage_points) > 50:   # Keeps only the 50 most recent entries 
+        packet_usage_points.pop(0)      
 
 
 @app.route("/")
@@ -43,16 +41,18 @@ def live_devices():
         print("[SSE] client connected")
         while True:
             try:
-                # prefer pushed updates from the scanner if available
-                devices = live_queue.get(timeout=2)
+                # Prefer pushed updates from the scanner if available
+                # We pull the item off the queue to clear it, then grab current state
+                _ = live_queue.get(timeout=2)
+                
+                # Fixed: Added parentheses () to call the database function
+                devices = get_all_devices()
+
                 print(f"[SSE] sending pushed update ({len(devices)} devices)")
                 yield f"event: update\ndata: {json.dumps(devices)}\n\n"
             except Empty:
-                # fallback to DB poll when no pushed update available
-                devices = get_all_devices()
-                print(f"[SSE] sending polled update ({len(devices)} devices)")
-                yield f"event: update\ndata: {json.dumps(devices)}\n\n"
-
+                # If queue is empty, loop again without crashing
+                pass
     return Response(
         event_stream(),
         mimetype="text/event-stream",
@@ -62,6 +62,7 @@ def live_devices():
 
 @app.route("/api/devices")
 def api_devices():
+    """Fetches device log data from logs.db."""
     include_hidden = request.args.get("include_hidden", "0").lower() in ("1", "true", "yes")
     devices = get_all_devices(include_hidden=include_hidden)
     return jsonify(devices)
@@ -69,6 +70,7 @@ def api_devices():
 
 @app.route("/api/device/hidden", methods=["POST"])
 def api_toggle_hidden():
+    """Hides or unhides any device from the main devices table."""
     data = request.get_json(force=True, silent=True) or {}
     ip = data.get("ip")
     hidden = data.get("hidden")
@@ -80,10 +82,17 @@ def api_toggle_hidden():
     return jsonify({"ok": True, "ip": ip, "hidden": bool(hidden)})
 
 
-@app.route("/api/network_usage")
-def api_network_usage():
-    total_seconds = get_network_usage()
-    return jsonify({"total_seconds": total_seconds})
+# Fixed: Corrected endpoint path and key mapping to match what your JavaScript uses
+@app.route("/api/unique_devices")
+def api_unique_devices():
+    """Returns accumulated seconds to the UI time-tracking card."""
+    total_seconds = get_total_logged_seconds()
+    
+    # We pass 'total_seconds' explicitly so the JS 'formatDuration' works
+    return jsonify({
+        "count": len(get_all_devices(include_hidden=True)),
+        "total_seconds": total_seconds
+    })
 
 
 @app.route("/api/packet_usage")
@@ -110,10 +119,13 @@ def api_sniffer_control():
 
     try:
         sniffer = get_global_sniffer()
-        if enable:
+        if enable:  
             sniffer.start()
         else:
-            sniffer.stop()
+            sniffer.stop()  
         return jsonify({'ok': True, 'enabled': bool(getattr(sniffer, '_running', False))})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+if __name__ == "__main__":
+    app.run(debug=True, host="0.0.0.0", port=5000)
