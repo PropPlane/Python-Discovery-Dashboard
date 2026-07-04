@@ -15,4 +15,4 @@ Format: >>"FILE"
             
 
     >>Python-Log-Analyzer
-        --Package the project
+        --Add a raspberry pi version
