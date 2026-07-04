@@ -183,6 +183,9 @@ def save_devices(devices, elapsed_seconds=0):
 
 def archive_devices():
     """Copies current log stats safely over to the archive file."""
+    init_db()
+    init_archive_db()
+
     con = sqlite3.connect(DB_PATH)
     cur = con.cursor()
     cur.execute("SELECT ip, status, mac, manufacturer, last_seen, hidden FROM logs")
@@ -212,6 +215,8 @@ def archive_devices():
 
 
 def get_all_devices(include_hidden=False):
+    init_db()
+
     con = sqlite3.connect(DB_PATH)
     cur = con.cursor()
 
@@ -236,6 +241,9 @@ def get_all_devices(include_hidden=False):
 
 
 def set_device_hidden(ip, hidden):
+    init_db()
+    init_archive_db()
+
     val = 1 if hidden else 0
     
     con = sqlite3.connect(DB_PATH)
@@ -253,6 +261,8 @@ def set_device_hidden(ip, hidden):
 
 def get_total_logged_seconds():
     """Returns the total network active time tracked inside the archive."""
+    init_archive_db()
+
     con = sqlite3.connect(ARCHIVE_PATH)
     cur = con.cursor()
     row = cur.execute("SELECT SUM(total_seconds) FROM device_archive").fetchone()
@@ -262,6 +272,8 @@ def get_total_logged_seconds():
 
 def get_unique_device_count():
     """Returns the number of devices currently tracked in the unique devices DB."""
+    init_unique_db()
+
     con = sqlite3.connect(UNIQUE_PATH)
     cur = con.cursor()
     row = cur.execute("SELECT COUNT(*) FROM unique_devices").fetchone()
@@ -271,6 +283,8 @@ def get_unique_device_count():
 
 def get_device_archive():
     """Safely retrieves all archive entries (Fixes the cut-off bug)."""
+    init_archive_db()
+
     con = sqlite3.connect(ARCHIVE_PATH)
     cur = con.cursor()
     rows = cur.execute("SELECT ip, status, mac, manufacturer, last_seen, hidden, total_seconds FROM device_archive").fetchall()
