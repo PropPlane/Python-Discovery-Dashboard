@@ -2,3 +2,4 @@ flask
 scapy
 ping3
 mac-vendor-lookup
+psutil
