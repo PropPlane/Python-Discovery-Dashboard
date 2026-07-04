@@ -5,3 +5,4 @@ database/logs.db
 database/device_archive.db
 .env
 .venv/
+database/unique_devices.db

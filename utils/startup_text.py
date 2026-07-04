@@ -2,7 +2,7 @@ import os
 import sys
 from datetime import datetime
 
-
+#This util is for outputting files as they are loaded in mainly used for debugging
 def _timestamp():
     return datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
 
