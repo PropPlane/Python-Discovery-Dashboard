@@ -260,6 +260,15 @@ def get_total_logged_seconds():
     return int(row[0] or 0)
 
 
+def get_unique_device_count():
+    """Returns the number of devices currently tracked in the unique devices DB."""
+    con = sqlite3.connect(UNIQUE_PATH)
+    cur = con.cursor()
+    row = cur.execute("SELECT COUNT(*) FROM unique_devices").fetchone()
+    con.close()
+    return int(row[0] or 0)
+
+
 def get_device_archive():
     """Safely retrieves all archive entries (Fixes the cut-off bug)."""
     con = sqlite3.connect(ARCHIVE_PATH)

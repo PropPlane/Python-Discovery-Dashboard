@@ -1,7 +1,30 @@
 const deviceTable = document.getElementById("deviceTable");
 const countEl = document.getElementById("count");
 const summaryTotal = document.getElementById("summaryTotal");
-const networkUsageEl = document.getElementById("networkUsage");
+
+function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+    }[char]));
+}
+
+function setText(element, value) {
+    if (element) {
+        element.innerText = value;
+    }
+}
+
+async function fetchJson(url, options) {
+    const response = await fetch(url, options);
+    if (!response.ok) {
+        throw new Error(`${url} returned ${response.status}`);
+    }
+    return response.json();
+}
 
 // 1. Setup Scatter Chart for Packet Usage
 const packetUsageChartCtx = document.getElementById("packetUsageChart").getContext("2d");
@@ -79,12 +102,12 @@ function renderDevices(devices) {
 
         rows += `
             <tr>
-                <td>${ip}</td>
-                <td>${status}</td>
-                <td>${mac}</td>
-                <td>${manufacturer}</td>
-                <td>${lastSeen}</td>
-                <td><button class="hide-button" data-ip="${ip}" data-hidden="0">Hide</button></td>
+                <td>${escapeHtml(ip)}</td>
+                <td>${escapeHtml(status)}</td>
+                <td>${escapeHtml(mac)}</td>
+                <td>${escapeHtml(manufacturer)}</td>
+                <td>${escapeHtml(lastSeen)}</td>
+                <td><button class="hide-button" data-ip="${escapeHtml(ip)}">Hide</button></td>
             </tr>
         `;
     });
@@ -93,8 +116,8 @@ function renderDevices(devices) {
         deviceTable.innerHTML = rows;
     }
     
-    countEl.innerText = devices.length;
-    summaryTotal.innerText = devices.length;
+    setText(countEl, devices.length);
+    setText(summaryTotal, devices.length);
 
     const currentChartData = statusChart.data.datasets[0].data;
     if (!currentChartData || currentChartData[0] !== online || currentChartData[1] !== offline){
@@ -113,12 +136,12 @@ function renderHiddenDevices(devices) {
         const lastSeen = device.last_seen || "";
         return `
             <tr>
-                <td>${ip}</td>
-                <td>${status}</td>
-                <td>${mac}</td>
-                <td>${manufacturer}</td>
-                <td>${lastSeen}</td>
-                <td><button class="unhide-button" data-ip="${ip}">Unhide</button></td>
+                <td>${escapeHtml(ip)}</td>
+                <td>${escapeHtml(status)}</td>
+                <td>${escapeHtml(mac)}</td>
+                <td>${escapeHtml(manufacturer)}</td>
+                <td>${escapeHtml(lastSeen)}</td>
+                <td><button class="unhide-button" data-ip="${escapeHtml(ip)}">Unhide</button></td>
             </tr>
         `;
     }).join("");
@@ -131,19 +154,27 @@ function renderHiddenDevices(devices) {
 
 // 5. Data Fetching Tasks
 async function loadDevices() {
-    const response = await fetch('/api/devices');
-    const devices = await response.json();
-    renderDevices(devices);
-    await updateUniqueDevices();
-    await updatePacketUsage();
-    await loadHiddenDevices();
+    try {
+        const devices = await fetchJson('/api/devices');
+        renderDevices(devices);
+        await Promise.all([
+            updateUniqueDevices(),
+            updatePacketUsage(),
+            loadHiddenDevices(),
+        ]);
+    } catch (error) {
+        console.error('Failed to load dashboard data:', error);
+    }
 }
 
 async function loadHiddenDevices() {
-    const response = await fetch('/api/devices?include_hidden=1');
-    const devices = await response.json();
-    const hiddenDevices = devices.filter((device) => device.hidden);
-    renderHiddenDevices(hiddenDevices);
+    try {
+        const devices = await fetchJson('/api/devices?include_hidden=1');
+        const hiddenDevices = devices.filter((device) => device.hidden);
+        renderHiddenDevices(hiddenDevices);
+    } catch (error) {
+        console.error('Failed to load hidden devices:', error);
+    }
 }
 
 function toggleHiddenContent() {
@@ -160,42 +191,37 @@ function toggleHiddenContent() {
 }
 
 async function updatePacketUsage() {
-    const response = await fetch('/api/packet_usage');
-    const points = await response.json();
-    packetUsageChart.data.datasets[0].data = points;
-    packetUsageChart.update();
-}
-
-function formatDuration(seconds) {
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const remainingMinutes = minutes % 60;
-    const remainingSeconds = seconds % 60;
-
-    if (hours > 0) {
-        return `${hours}h ${remainingMinutes}m ${remainingSeconds}s`;
+    try {
+        const points = await fetchJson('/api/packet_usage');
+        packetUsageChart.data.datasets[0].data = points;
+        packetUsageChart.update();
+    } catch (error) {
+        console.error('Failed to update packet usage:', error);
     }
-    if (minutes > 0) {
-        return `${minutes}m ${remainingSeconds}s`;
-    }
-    return `${remainingSeconds}s`;
 }
 
 async function updateUniqueDevices() {
-    // Fixed: Handles counting items safely and updates both cards correctly
-    const response = await fetch('/api/unique_devices');
-    const data = await response.json();
-    
-    // Update unique device count card
-    const usageEl = document.getElementById('uniqueDevices');
-    if (usageEl) {
-        // If your API returns an object like { count: X }, use data.count. Otherwise use raw data.
-        usageEl.innerText = data.count !== undefined ? data.count : data;
+    try {
+        const data = await fetchJson('/api/unique_devices');
+        const usageEl = document.getElementById('uniqueDevices');
+        if (usageEl) {
+            usageEl.innerText = data.count ?? 0;
+        }
+    } catch (error) {
+        console.error('Failed to update summary metrics:', error);
     }
+}
 
-    // Update accumulated total active log time element if provided by your backend
-    if (networkUsageEl && data.total_seconds !== undefined) {
-        networkUsageEl.innerText = formatDuration(data.total_seconds);
+async function setDeviceHidden(ip, hidden) {
+    try {
+        await fetchJson('/api/device/hidden', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ip, hidden }),
+        });
+        await loadDevices();
+    } catch (error) {
+        console.error(`Failed to ${hidden ? 'hide' : 'unhide'} ${ip}:`, error);
     }
 }
 
@@ -254,6 +280,7 @@ function handleLiveEvent(event) {
         renderDevices(devices);
         updatePacketUsage();
         updateUniqueDevices();
+        loadHiddenDevices();
     } catch (error) {
         console.error('Failed to parse SSE payload:', error);
     }
@@ -262,3 +289,35 @@ function handleLiveEvent(event) {
 // Listen to explicit 'update' events and raw stream fallbacks
 eventSource.addEventListener('update', handleLiveEvent);
 eventSource.onmessage = handleLiveEvent;
+
+eventSource.onerror = () => {
+    console.warn('Live update stream disconnected; polling for dashboard data.');
+};
+
+document.addEventListener('click', (event) => {
+    const hideButton = event.target.closest('.hide-button');
+    if (hideButton) {
+        setDeviceHidden(hideButton.dataset.ip, true);
+        return;
+    }
+
+    const unhideButton = event.target.closest('.unhide-button');
+    if (unhideButton) {
+        setDeviceHidden(unhideButton.dataset.ip, false);
+        return;
+    }
+
+    if (event.target.closest('#toggleHiddenDevices')) {
+        toggleHiddenContent();
+    }
+});
+
+const snifferToggle = document.getElementById('snifferToggle');
+if (snifferToggle) {
+    snifferToggle.addEventListener('click', toggleSniffer);
+}
+
+loadDevices();
+fetchSnifferStatus();
+setInterval(loadDevices, 10000);
+setInterval(fetchSnifferStatus, 10000);

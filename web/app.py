@@ -1,5 +1,12 @@
 from flask import Flask, render_template, jsonify, Response, request
-from database.db import get_all_devices, get_total_logged_seconds, set_device_hidden
+from pathlib import Path
+import sys
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from database.db import get_all_devices, get_unique_device_count, set_device_hidden
 from queue import Queue, Empty
 import time
 import json
@@ -82,17 +89,10 @@ def api_toggle_hidden():
     return jsonify({"ok": True, "ip": ip, "hidden": bool(hidden)})
 
 
-# Fixed: Corrected endpoint path and key mapping to match what your JavaScript uses
 @app.route("/api/unique_devices")
 def api_unique_devices():
-    """Returns accumulated seconds to the UI time-tracking card."""
-    total_seconds = get_total_logged_seconds()
-    
-    # We pass 'total_seconds' explicitly so the JS 'formatDuration' works
-    return jsonify({
-        "count": len(get_all_devices(include_hidden=True)),
-        "total_seconds": total_seconds
-    })
+    """Returns the unique device count for the summary metrics table."""
+    return jsonify({"count": get_unique_device_count()})
 
 
 @app.route("/api/packet_usage")
