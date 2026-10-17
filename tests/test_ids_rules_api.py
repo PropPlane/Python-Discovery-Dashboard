@@ -106,6 +106,29 @@ class IdsRulesApiTests(unittest.TestCase):
         response = self.client.post("/api/ids/rules", json=invalid_mitre)
         self.assertEqual(response.status_code, 400)
 
+    def test_custom_rule_persists_excluded_device_ips(self):
+        rule_data = self.valid_rule()
+        rule_data.update({
+            "excluded_ips": ["192.0.2.10", "192.0.2.11", "192.0.2.10"],
+        })
+        response = self.client.post("/api/ids/rules", json=rule_data)
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.get_json()["excluded_ips"], ["192.0.2.10", "192.0.2.11"])
+
+        invalid = self.valid_rule()
+        invalid["name"] = "Invalid excluded address"
+        invalid["excluded_ips"] = ["not-an-ip"]
+        response = self.client.post("/api/ids/rules", json=invalid)
+        self.assertEqual(response.status_code, 400)
+
+    def test_global_exemption_api_rejects_custom_rule_categories(self):
+        response = self.client.post("/api/ids/exemptions", json={
+            "device_ip": "192.0.2.10",
+            "alert_type": "Custom rule",
+        })
+        self.assertEqual(response.status_code, 400)
+
     def test_rule_event_types_and_metrics(self):
         cases = [
             ("Ping sweep", "ping_sweep", "unique_destinations", "T1018"),

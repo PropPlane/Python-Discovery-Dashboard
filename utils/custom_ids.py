@@ -35,6 +35,9 @@ class CustomRuleEngine:
                 rule_type = rule["rule_type"]
                 if rule_type == "new_device":
                     continue
+                excluded_ips = set(rule.get("excluded_ips") or ())
+                if source_ip in excluded_ips or event_destination in excluded_ips:
+                    continue
                 if rule.get("source_ip") and rule["source_ip"] != source_ip:
                     continue
                 if rule.get("destination_ip") and rule["destination_ip"] != event_destination:
@@ -150,6 +153,8 @@ class CustomRuleEngine:
         with self._lock:
             for rule in self._get_rules(now):
                 if rule["rule_type"] != "new_device":
+                    continue
+                if source_ip in set(rule.get("excluded_ips") or ()):
                     continue
                 if rule.get("source_ip") and rule["source_ip"] != source_ip:
                     continue

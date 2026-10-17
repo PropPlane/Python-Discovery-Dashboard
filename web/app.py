@@ -7,12 +7,15 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from database.db import (
+    add_ids_alert_exemption,
     delete_all_ids_alerts,
     delete_ids_alert,
+    delete_ids_alert_exemption,
     create_ids_rule,
     delete_ids_rule,
     get_all_devices,
     get_ids_rules,
+    get_ids_alert_exemptions,
     get_recent_ids_alerts,
     get_recent_packet_counts,
     record_packet_count,
@@ -125,6 +128,30 @@ def api_delete_ids_alert(alert_id):
     if not delete_ids_alert(alert_id):
         return jsonify({"error": "alert not found"}), 404
     return jsonify({"ok": True, "id": alert_id})
+
+
+@app.route("/api/ids/exemptions", methods=["GET"])
+def api_ids_alert_exemptions():
+    return jsonify(get_ids_alert_exemptions())
+
+
+@app.route("/api/ids/exemptions", methods=["POST"])
+def api_add_ids_alert_exemption():
+    data = request.get_json(force=True, silent=True) or {}
+    try:
+        exemption = add_ids_alert_exemption(
+            data.get("device_ip"), data.get("alert_type", "*")
+        )
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+    return jsonify(exemption), 201
+
+
+@app.route("/api/ids/exemptions/<int:exemption_id>", methods=["DELETE"])
+def api_delete_ids_alert_exemption(exemption_id):
+    if not delete_ids_alert_exemption(exemption_id):
+        return jsonify({"error": "exemption not found"}), 404
+    return jsonify({"ok": True, "id": exemption_id})
 
 
 @app.route("/api/ids/rules", methods=["GET"])

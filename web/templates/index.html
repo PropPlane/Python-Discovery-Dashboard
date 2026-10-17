@@ -320,6 +320,44 @@
     </section>
 
     <section class="panel">
+        <div class="section-heading exemption-heading">
+            <div>
+                <p class="section-kicker">Alert tuning</p>
+                <h2>Built-in alert exemptions</h2>
+                <p class="chart-note">Custom-rule exclusions are configured inside each rule. These exemptions apply only to the built-in detectors.</p>
+            </div>
+        </div>
+        <form id="alertExemptionForm" class="exemption-form">
+            <label>Device IPv4
+                <input name="device_ip" type="text" inputmode="decimal" required placeholder="192.168.1.25">
+            </label>
+            <label>Exempt from
+                <select name="alert_type" id="exemptionAlertType">
+                    <option value="*">All built-in alert types</option>
+                    <option value="Port scan">Port scan</option>
+                    <option value="Packet burst">Packet burst</option>
+                    <option value="Conflicting ARP claim">Conflicting ARP claim</option>
+                </select>
+            </label>
+            <button class="capture-button" type="submit">Add exemption</button>
+            <span id="exemptionFormMessage" class="exemption-message" role="status"></span>
+        </form>
+        <div class="table-scroll">
+            <table class="exemptions-table">
+                <thead>
+                    <tr>
+                        <th>Device</th>
+                        <th>Exempt alert type</th>
+                        <th>Added</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="alertExemptionTable"></tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="panel">
         <div class="section-heading alert-panel-heading">
             <div>
                 <p class="section-kicker">Detection</p>
@@ -475,6 +513,9 @@
             </label>
             <label class="rule-destination-field">Destination IP filter <span>(optional)</span>
                 <input name="destination_ip" type="text" inputmode="decimal" placeholder="Any destination">
+            </label>
+            <label class="rule-excluded-ips-field">Excluded device IPs <span>(optional, comma or line separated)</span>
+                <textarea name="excluded_ips" rows="3" placeholder="192.168.1.20, 192.168.1.35"></textarea>
             </label>
             <label class="rule-min-sources-field">Minimum distinct sources
                 <input name="min_sources" type="number" min="1" max="10000" value="1">

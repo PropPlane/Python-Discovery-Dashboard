@@ -15,6 +15,28 @@ class FakeClock:
 
 
 class PacketSnifferRuleTests(unittest.TestCase):
+    def test_alert_exemptions_filter_matching_device_and_category(self):
+        alerts = [
+            {"alert_type": "Port scan", "source_ip": "192.0.2.10"},
+            {"alert_type": "Packet burst", "source_ip": "192.0.2.10"},
+            {"alert_type": "Port scan", "source_ip": "192.0.2.11"},
+            {"alert_type": "Custom flood", "destination_ip": "192.0.2.50"},
+        ]
+        exemptions = [
+            {"device_ip": "192.0.2.10", "alert_type": "Port scan"},
+            {"device_ip": "192.0.2.50", "alert_type": "*"},
+        ]
+
+        with patch("database.db.get_ids_alert_exemptions", return_value=exemptions), \
+                patch("database.db.save_ids_alert") as save_alert:
+            PacketSniffer._persist_alerts(alerts, use_global_exemptions=True)
+
+        self.assertEqual(save_alert.call_count, 2)
+        self.assertEqual(
+            [call.args[0]["alert_type"] for call in save_alert.call_args_list],
+            ["Packet burst", "Port scan"],
+        )
+
     def test_interface_can_be_retargeted_and_paused(self):
         sniffer = PacketSniffer(iface="Wi-Fi")
 

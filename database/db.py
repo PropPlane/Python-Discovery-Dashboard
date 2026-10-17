@@ -5,6 +5,7 @@ module_startup_text(__file__)
 import os
 import sqlite3
 import ipaddress
+import json
 import re
 from datetime import datetime
 import time
@@ -58,8 +59,19 @@ def init_db():
         destination_ip TEXT,
         min_sources INTEGER NOT NULL DEFAULT 1,
         mitre_id TEXT,
+        excluded_ips TEXT NOT NULL DEFAULT '[]',
         enabled INTEGER NOT NULL DEFAULT 1,
         created_at TEXT NOT NULL
+    )
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS ids_alert_exemptions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        device_ip TEXT NOT NULL,
+        alert_type TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE(device_ip, alert_type)
     )
     """)
 
@@ -90,6 +102,7 @@ def init_db():
         "destination_ip": "TEXT",
         "min_sources": "INTEGER NOT NULL DEFAULT 1",
         "mitre_id": "TEXT",
+        "excluded_ips": "TEXT NOT NULL DEFAULT '[]'",
     }
     for column, definition in rule_migrations.items():
         if column not in rule_columns:
@@ -101,6 +114,31 @@ def init_db():
         "UPDATE ids_rules SET mitre_id='T1046' "
         "WHERE rule_type='port_scan' AND mitre_id IS NULL"
     )
+
+    legacy_custom_exemptions = cur.execute(
+        "SELECT id, device_ip, alert_type FROM ids_alert_exemptions "
+        "WHERE alert_type = 'Custom rule' OR alert_type LIKE 'Custom rule: %'"
+    ).fetchall()
+    for exemption_id, device_ip, alert_type in legacy_custom_exemptions:
+        if alert_type == "Custom rule":
+            matching_rules = cur.execute("SELECT id, excluded_ips FROM ids_rules").fetchall()
+        else:
+            rule_name = alert_type.removeprefix("Custom rule: ").strip()
+            matching_rules = cur.execute(
+                "SELECT id, excluded_ips FROM ids_rules WHERE name = ?", (rule_name,)
+            ).fetchall()
+        for rule_id, excluded_json in matching_rules:
+            try:
+                excluded_ips = json.loads(excluded_json or "[]")
+            except (TypeError, json.JSONDecodeError):
+                excluded_ips = []
+            if device_ip not in excluded_ips:
+                excluded_ips.append(device_ip)
+                cur.execute(
+                    "UPDATE ids_rules SET excluded_ips = ? WHERE id = ?",
+                    (json.dumps(excluded_ips), rule_id),
+                )
+        cur.execute("DELETE FROM ids_alert_exemptions WHERE id = ?", (exemption_id,))
     
     cur.execute("PRAGMA table_info(logs)")
     existing_columns = [row[1] for row in cur.fetchall()]
@@ -435,6 +473,72 @@ def delete_all_ids_alerts():
     return deleted_count
 
 
+def add_ids_alert_exemption(device_ip, alert_type="*"):
+    device_ip = str(device_ip or "").strip()
+    alert_type = str(alert_type or "*").strip()
+    try:
+        if ipaddress.ip_address(device_ip).version != 4:
+            raise ValueError
+    except ValueError as error:
+        raise ValueError("Device IP must be a valid IPv4 address.") from error
+    builtin_alert_types = {"*", "Port scan", "Packet burst", "Conflicting ARP claim"}
+    if alert_type not in builtin_alert_types:
+        raise ValueError("Choose a valid alert type.")
+
+    init_db()
+    con = sqlite3.connect(DB_PATH)
+    con.execute(
+        "INSERT OR IGNORE INTO ids_alert_exemptions (device_ip, alert_type, created_at) "
+        "VALUES (?, ?, ?)",
+        (device_ip, alert_type, datetime.now().astimezone().isoformat(timespec="seconds")),
+    )
+    con.commit()
+    row = con.execute(
+        "SELECT id, device_ip, alert_type, created_at FROM ids_alert_exemptions "
+        "WHERE device_ip = ? AND alert_type = ?",
+        (device_ip, alert_type),
+    ).fetchone()
+    con.close()
+    return {"id": row[0], "device_ip": row[1], "alert_type": row[2], "created_at": row[3]}
+
+
+def get_ids_alert_exemptions():
+    init_db()
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    rows = con.execute(
+        "SELECT id, device_ip, alert_type, created_at "
+        "FROM ids_alert_exemptions ORDER BY device_ip, alert_type"
+    ).fetchall()
+    con.close()
+    return [dict(row) for row in rows]
+
+
+def delete_ids_alert_exemption(exemption_id):
+    init_db()
+    con = sqlite3.connect(DB_PATH)
+    cur = con.execute("DELETE FROM ids_alert_exemptions WHERE id = ?", (int(exemption_id),))
+    con.commit()
+    deleted = cur.rowcount > 0
+    con.close()
+    return deleted
+
+
+def is_ids_alert_exempt(alert, exemptions):
+    alert_type = alert.get("alert_type", "")
+    if alert_type.startswith("Custom rule: "):
+        return False
+    device_ips = {alert.get("source_ip"), alert.get("destination_ip")}
+    return any(
+        exemption["device_ip"] in device_ips
+        and (
+            exemption["alert_type"] == "*"
+            or exemption["alert_type"] == alert_type
+        )
+        for exemption in exemptions
+    )
+
+
 def _validate_ids_rule(data):
     if not isinstance(data, dict):
         raise ValueError("Rule data must be a JSON object.")
@@ -549,6 +653,26 @@ def _validate_ids_rule(data):
     if mitre_id and not re.fullmatch(r"T[0-9]{4}(?:\.[0-9]{3})?", mitre_id):
         raise ValueError("MITRE ID must look like T1018 or T1498.001.")
 
+    raw_excluded_ips = data.get("excluded_ips", [])
+    if isinstance(raw_excluded_ips, str):
+        raw_excluded_ips = re.split(r"[,\n\r]+", raw_excluded_ips)
+    if not isinstance(raw_excluded_ips, (list, tuple)):
+        raise ValueError("Excluded devices must be a list of IPv4 addresses.")
+    excluded_ips = []
+    for raw_ip in raw_excluded_ips:
+        excluded_ip = str(raw_ip or "").strip()
+        if not excluded_ip:
+            continue
+        try:
+            if ipaddress.ip_address(excluded_ip).version != 4:
+                raise ValueError
+        except ValueError as error:
+            raise ValueError(f"Excluded device is not a valid IPv4 address: {excluded_ip}") from error
+        if excluded_ip not in excluded_ips:
+            excluded_ips.append(excluded_ip)
+    if len(excluded_ips) > 100:
+        raise ValueError("A rule can exclude at most 100 device IPs.")
+
     default_min_sources = 3 if rule_type == "target_flood" else 1
     try:
         min_sources = int(data.get("min_sources", default_min_sources))
@@ -578,6 +702,7 @@ def _validate_ids_rule(data):
         "group_by": group_by,
         "min_sources": min_sources,
         "mitre_id": mitre_id,
+        "excluded_ips": excluded_ips,
         "enabled": enabled,
     }
 
@@ -592,14 +717,14 @@ def create_ids_rule(data):
             INSERT INTO ids_rules
                  (name, rule_type, threshold, window_seconds, severity, source_ip,
                   protocol, metric, group_by, destination_ip, min_sources, mitre_id,
-                  enabled, created_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                    excluded_ips, enabled, created_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (rule["name"], rule["rule_type"], rule["threshold"],
              rule["window_seconds"], rule["severity"], rule["source_ip"],
                rule["protocol"], rule["metric"], rule["group_by"],
                rule["destination_ip"], rule["min_sources"], rule["mitre_id"],
-               int(rule["enabled"]),
+               json.dumps(rule["excluded_ips"]), int(rule["enabled"]),
              datetime.now().astimezone().isoformat(timespec="seconds")),
         )
         rule_id = cur.lastrowid
@@ -623,6 +748,10 @@ def get_ids_rule(rule_id):
 def _ids_rule_dict(row):
     rule = dict(row)
     rule["enabled"] = bool(rule["enabled"])
+    try:
+        rule["excluded_ips"] = json.loads(rule.get("excluded_ips") or "[]")
+    except (TypeError, json.JSONDecodeError):
+        rule["excluded_ips"] = []
     return rule
 
 

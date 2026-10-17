@@ -33,8 +33,8 @@ class PacketSniffer:
             self._count += 1
 
         fields = self._extract_fields(pkt)
-        alerts = self._detector.observe(**fields)
-        alerts.extend(self._custom_detector.observe(
+        builtin_alerts = self._detector.observe(**fields)
+        custom_alerts = self._custom_detector.observe(
             source_ip=fields.get("source_ip"),
             destination_ip=fields.get("destination_ip"),
             destination_port=fields.get("destination_port"),
@@ -43,18 +43,33 @@ class PacketSniffer:
             tcp_syn=fields.get("tcp_syn", False),
             arp_op=fields.get("arp_op"),
             arp_target_ip=fields.get("arp_target_ip"),
-        ))
-        self._persist_alerts(alerts)
+        )
+        self._persist_alerts(builtin_alerts, use_global_exemptions=True)
+        self._persist_alerts(custom_alerts)
 
     def observe_new_device(self, ip_address, mac_address):
         alerts = self._custom_detector.observe_new_device(ip_address, mac_address)
         self._persist_alerts(alerts)
 
     @staticmethod
-    def _persist_alerts(alerts):
-        for alert in alerts:
+    def _persist_alerts(alerts, use_global_exemptions=False):
+        if not alerts:
+            return
+        from database.db import save_ids_alert
+        exemptions = []
+        is_exempt = lambda alert: False
+        if use_global_exemptions:
             try:
-                from database.db import save_ids_alert
+                from database.db import get_ids_alert_exemptions, is_ids_alert_exempt
+                exemptions = get_ids_alert_exemptions()
+                is_exempt = lambda alert: is_ids_alert_exempt(alert, exemptions)
+            except Exception:
+                pass
+
+        for alert in alerts:
+            if is_exempt(alert):
+                continue
+            try:
                 save_ids_alert(alert)
             except Exception:
                 pass

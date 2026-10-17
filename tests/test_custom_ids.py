@@ -206,6 +206,31 @@ class CustomRuleEngineTests(unittest.TestCase):
         self.assertEqual(alerts[0]["destination_ip"], "192.0.2.50")
         self.assertEqual(alerts[0]["mitre_id"], "T1498.001")
 
+    def test_rule_excluded_ips_skip_only_matching_rule_events(self):
+        self.rules[0]["excluded_ips"] = ["192.0.2.10"]
+        for _ in range(3):
+            self.assertEqual(self.engine.observe(
+                source_ip="192.0.2.10", destination_ip="192.0.2.1", protocol="TCP"
+            ), [])
+        for _ in range(2):
+            self.assertEqual(self.engine.observe(
+                source_ip="192.0.2.11", destination_ip="192.0.2.1", protocol="TCP"
+            ), [])
+        alerts = self.engine.observe(
+            source_ip="192.0.2.11", destination_ip="192.0.2.1", protocol="TCP"
+        )
+        self.assertEqual(len(alerts), 1)
+        self.assertEqual(alerts[0]["source_ip"], "192.0.2.11")
+
+    def test_rule_excluded_ip_skips_new_device_event(self):
+        self.rules[0].update({
+            "rule_type": "new_device",
+            "excluded_ips": ["192.0.2.10"],
+        })
+
+        self.assertEqual(self.engine.observe_new_device("192.0.2.10", "aa:bb:cc:00:00:10"), [])
+        self.assertEqual(len(self.engine.observe_new_device("192.0.2.11", "aa:bb:cc:00:00:11")), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

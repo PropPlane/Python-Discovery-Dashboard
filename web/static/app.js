@@ -2,6 +2,7 @@ const deviceTable = document.getElementById("deviceTable");
 const countEl = document.getElementById("count");
 let currentIdsAlerts = [];
 let currentIdsRules = [];
+let currentAlertExemptions = [];
 
 function escapeHtml(value) {
     return String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -294,9 +295,88 @@ function renderIdsAlerts() {
 async function loadIdsAlerts() {
     try {
         currentIdsAlerts = await fetchJson('/api/ids/alerts');
+        updateExemptionAlertTypes();
         renderIdsAlerts();
     } catch (error) {
         console.error('Failed to load IDS alerts:', error);
+    }
+}
+
+function updateExemptionAlertTypes() {
+    const select = document.getElementById('exemptionAlertType');
+    if (!select) return;
+    const selected = select.value;
+    const builtinTypes = [
+        ['*', 'All built-in alert types'],
+        ['Port scan', 'Port scan'],
+        ['Packet burst', 'Packet burst'],
+        ['Conflicting ARP claim', 'Conflicting ARP claim'],
+    ];
+    const known = new Set(builtinTypes.map(([value]) => value));
+    select.innerHTML = builtinTypes.map(([value, label]) =>
+        `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`
+    ).join('');
+    select.value = known.has(selected) ? selected : '*';
+}
+
+function renderAlertExemptions() {
+    const table = document.getElementById('alertExemptionTable');
+    if (!table) return;
+    if (!currentAlertExemptions.length) {
+        table.innerHTML = '<tr><td class="empty-state" colspan="4">No alert exemptions configured.</td></tr>';
+        return;
+    }
+
+    table.innerHTML = currentAlertExemptions.map((exemption) => `
+        <tr>
+            <td>${escapeHtml(exemption.device_ip)}</td>
+            <td>${escapeHtml(exemption.alert_type === '*' ? 'All built-in alert types' : exemption.alert_type)}</td>
+            <td>${escapeHtml(exemption.created_at)}</td>
+            <td><button class="delete-exemption-button" type="button" data-exemption-id="${escapeHtml(exemption.id)}">Remove</button></td>
+        </tr>
+    `).join('');
+}
+
+async function loadAlertExemptions() {
+    try {
+        currentAlertExemptions = await fetchJson('/api/ids/exemptions');
+        renderAlertExemptions();
+    } catch (error) {
+        console.error('Failed to load alert exemptions:', error);
+    }
+}
+
+async function submitAlertExemption(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const message = document.getElementById('exemptionFormMessage');
+    const values = new FormData(form);
+    if (message) message.textContent = '';
+    try {
+        const response = await fetch('/api/ids/exemptions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(Object.fromEntries(values.entries())),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Could not add exemption.');
+        form.reset();
+        if (message) message.textContent = `Exemption added for ${result.device_ip}.`;
+        await loadAlertExemptions();
+    } catch (error) {
+        if (message) message.textContent = error.message;
+    }
+}
+
+async function deleteAlertExemption(exemptionId) {
+    try {
+        await fetchJson(`/api/ids/exemptions/${encodeURIComponent(exemptionId)}`, { method: 'DELETE' });
+        currentAlertExemptions = currentAlertExemptions.filter(
+            (exemption) => String(exemption.id) !== String(exemptionId)
+        );
+        renderAlertExemptions();
+    } catch (error) {
+        console.error('Failed to remove alert exemption:', error);
     }
 }
 
@@ -339,6 +419,7 @@ function renderIdsRules() {
             `dst ${rule.destination_ip || 'any'}`,
             rule.protocol === 'ANY' ? '' : rule.protocol,
             rule.min_sources > 1 ? `${rule.min_sources}+ sources` : '',
+            rule.excluded_ips?.length ? `${rule.excluded_ips.length} excluded` : '',
         ].filter(Boolean).join(' · ');
         const nextEnabled = !rule.enabled;
         return `
@@ -516,6 +597,7 @@ async function submitIdsRule(event) {
     const rule = Object.fromEntries(values.entries());
     rule.threshold = Number(rule.threshold);
     rule.window_seconds = Number(rule.window_seconds);
+    rule.excluded_ips = String(rule.excluded_ips || '').split(/[\s,]+/).filter(Boolean);
     rule.enabled = form.elements.enabled.checked;
 
     if (errorMessage) errorMessage.textContent = '';
@@ -666,6 +748,12 @@ eventSource.onerror = () => {
 };
 
 document.addEventListener('click', (event) => {
+    const removeExemptionButton = event.target.closest('.delete-exemption-button');
+    if (removeExemptionButton) {
+        deleteAlertExemption(removeExemptionButton.dataset.exemptionId);
+        return;
+    }
+
     const ruleToggle = event.target.closest('.rule-toggle-button');
     if (ruleToggle) {
         setIdsRuleEnabled(ruleToggle.dataset.ruleId, ruleToggle.dataset.enabled === 'true');
@@ -711,6 +799,11 @@ document.addEventListener('click', (event) => {
         clearAlerts();
     }
 });
+
+const alertExemptionForm = document.getElementById('alertExemptionForm');
+if (alertExemptionForm) {
+    alertExemptionForm.addEventListener('submit', submitAlertExemption);
+}
 
 const createRuleButton = document.getElementById('createIdsRule');
 const idsRuleDialog = document.getElementById('idsRuleDialog');
@@ -765,9 +858,11 @@ if (snifferToggle) {
 loadDevices();
 loadNetworkInfo();
 loadIdsRules();
+loadAlertExemptions();
 fetchSnifferStatus();
 setInterval(loadDevices, 10000);
 setInterval(loadNetworkInfo, 30000);
 setInterval(loadIdsRules, 15000);
+setInterval(loadAlertExemptions, 15000);
 setInterval(loadIdsAlerts, 5000);
 setInterval(fetchSnifferStatus, 10000);
