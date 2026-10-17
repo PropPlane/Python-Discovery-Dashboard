@@ -6,17 +6,30 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from database.db import get_all_devices, get_unique_device_count, set_device_hidden
+from database.db import (
+    delete_all_ids_alerts,
+    delete_ids_alert,
+    create_ids_rule,
+    delete_ids_rule,
+    get_all_devices,
+    get_ids_rules,
+    get_recent_ids_alerts,
+    get_recent_packet_counts,
+    record_packet_count,
+    get_unique_device_count,
+    set_device_hidden,
+    set_ids_rule_enabled,
+)
 from queue import Queue, Empty
-import time
 import json
 from utils.packet_sniffer import get_global_sniffer
+from utils.Lauto_detect import detect_interface
+from utils.network_info import get_network_ssid
 
 app = Flask(__name__)
 
 # In-memory queue for pushing live scan updates from the scanner
 live_queue = Queue()
-packet_usage_points = []
 
 
 def push_live_update(devices):
@@ -29,12 +42,9 @@ def push_live_update(devices):
         pass
 
 
-def record_packet_usage(count):
-    """Gets current unix time in milliseconds and saves the plot point position."""
-    timestamp = int(time.time() * 1000)     
-    packet_usage_points.append({"x": timestamp, "y": count})    
-    if len(packet_usage_points) > 50:   # Keeps only the 50 most recent entries 
-        packet_usage_points.pop(0)      
+def record_packet_usage(count, interval_seconds=10):
+    """Persist one captured-packet sample for the dashboard traffic chart."""
+    record_packet_count(count, interval_seconds)
 
 
 @app.route("/")
@@ -97,17 +107,80 @@ def api_unique_devices():
 
 @app.route("/api/packet_usage")
 def api_packet_usage():
-    return jsonify(packet_usage_points)
+    return jsonify(get_recent_packet_counts())
+
+
+@app.route("/api/ids/alerts")
+def api_ids_alerts():
+    return jsonify(get_recent_ids_alerts())
+
+
+@app.route("/api/ids/alerts", methods=["DELETE"])
+def api_clear_ids_alerts():
+    return jsonify({"ok": True, "deleted": delete_all_ids_alerts()})
+
+
+@app.route("/api/ids/alerts/<int:alert_id>", methods=["DELETE"])
+def api_delete_ids_alert(alert_id):
+    if not delete_ids_alert(alert_id):
+        return jsonify({"error": "alert not found"}), 404
+    return jsonify({"ok": True, "id": alert_id})
+
+
+@app.route("/api/ids/rules", methods=["GET"])
+def api_ids_rules():
+    return jsonify(get_ids_rules())
+
+
+@app.route("/api/ids/rules", methods=["POST"])
+def api_create_ids_rule():
+    data = request.get_json(force=True, silent=True) or {}
+    try:
+        rule = create_ids_rule(data)
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+    return jsonify(rule), 201
+
+
+@app.route("/api/ids/rules/<int:rule_id>", methods=["PATCH", "DELETE"])
+def api_manage_ids_rule(rule_id):
+    if request.method == "DELETE":
+        if not delete_ids_rule(rule_id):
+            return jsonify({"error": "rule not found"}), 404
+        return jsonify({"ok": True, "id": rule_id})
+
+    data = request.get_json(force=True, silent=True) or {}
+    try:
+        rule = set_ids_rule_enabled(rule_id, data.get("enabled"))
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+    if not rule:
+        return jsonify({"error": "rule not found"}), 404
+    return jsonify(rule)
+
+
+@app.route("/api/network")
+def api_network():
+    interface, ip_address = detect_interface()
+    return jsonify({
+        "ssid": get_network_ssid(interface),
+        "interface": interface,
+        "ip": ip_address,
+    })
 
 
 @app.route('/api/sniffer/status')
 def api_sniffer_status():
     try:
         sniffer = get_global_sniffer()
-        enabled = bool(getattr(sniffer, '_running', False))
+        running = bool(getattr(sniffer, '_running', False))
+        interface = getattr(sniffer, 'iface', None)
+        enabled = running and bool(interface)
     except Exception:
+        running = False
+        interface = None
         enabled = False
-    return jsonify({'enabled': enabled})
+    return jsonify({'enabled': enabled, 'running': running, 'interface': interface})
 
 
 @app.route('/api/sniffer', methods=['POST'])
@@ -123,7 +196,14 @@ def api_sniffer_control():
             sniffer.start()
         else:
             sniffer.stop()  
-        return jsonify({'ok': True, 'enabled': bool(getattr(sniffer, '_running', False))})
+        running = bool(getattr(sniffer, '_running', False))
+        enabled = running and bool(getattr(sniffer, 'iface', None))
+        return jsonify({
+            'ok': True,
+            'enabled': enabled,
+            'running': running,
+            'interface': getattr(sniffer, 'iface', None),
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

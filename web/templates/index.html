@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Live Network Dashboard</title>
+    <title>Discovery Dashboard | Network Monitor</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -132,6 +132,20 @@
             grid-column: 1 / -1;
         }
 
+        .ids-alerts-card {
+            grid-column: 1 / -1;
+        }
+
+        .severity-high {
+            color: #a32222;
+            font-weight: 700;
+        }
+
+        .severity-medium {
+            color: #8a5a00;
+            font-weight: 700;
+        }
+
         .table-card table {
             width: 100%;
             table-layout: fixed;
@@ -219,107 +233,295 @@
             margin-top: 0;
         }
     </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
 </head>
-<body>
-
-<h1>Live Network Dashboard</h1>
-
-<div class="dashboard">
-    <div class="summary-cards">
-        <div class="card total-devices-card">
-            <h3>Total Devices</h3>
-            <p id="count">0</p>
-        </div>
-        <div class="card" style="display:flex;align-items:center;justify-content:space-between;min-width:180px;">
-            <div>
-                <h3 style="margin:0 0 6px 0;font-size:0.95rem;">Packet Sniffer</h3>
-                <div id="snifferStatus" style="font-size:0.9rem;color:#58606a;">Unknown</div>
-            </div>
-            <div>
-                <button id="snifferToggle" class="sniffer-toggle-button">Toggle</button>
-            </div>
+<body class="dashboard-page">
+<header class="app-header">
+    <div class="header-inner">
+        <div class="header-copy">
+            <p class="eyebrow">Connected network</p>
+            <h1 id="networkSsid">Detecting network...</h1>
+            <p class="subhead"><span id="networkInterface">Interface unavailable</span> <span aria-hidden="true">·</span> <span id="networkAddress">Address unavailable</span></p>
         </div>
     </div>
+</header>
 
-    <div class="graph-card">
-        <h3>Packet Usage</h3>
-        <canvas id="packetUsageChart"></canvas>
-    </div>
+<main class="page-shell">
+    <section class="metric-grid" aria-label="Network summary">
+        <article class="metric-card">
+            <span class="metric-label">Devices observed</span>
+            <strong class="metric-value" id="count">0</strong>
+            <span class="metric-note">Current network inventory</span>
+        </article>
+        <article class="metric-card">
+            <span class="metric-label">Unique devices</span>
+            <strong class="metric-value" id="uniqueDevices">0</strong>
+            <span class="metric-note">Tracked device history</span>
+        </article>
+        <article class="metric-card capture-metric">
+            <div>
+                <span class="metric-label">Packet capture</span>
+                <span id="snifferStatus" class="capture-status">Unknown</span>
+            </div>
+            <button id="snifferToggle" class="capture-button" data-running="false">Start capture</button>
+        </article>
+    </section>
 
-    <div class="graph-card device-status-card">
-        <h3>Device Status</h3>
-        <canvas id="statusChart"></canvas>
-    </div>
-</div>
+    <section class="chart-grid" aria-label="Network activity charts">
+        <div class="graph-card">
+            <div class="section-heading">
+                <div>
+                    <p class="section-kicker">Traffic monitor</p>
+                    <h2>Packet volume</h2>
+                    <p class="chart-note">Intervals above 25 packets/sec are highlighted for investigation.</p>
+                </div>
+            </div>
+            <div class="chart-frame"><canvas id="packetUsageChart"></canvas></div>
+        </div>
+        <div class="graph-card">
+            <div class="section-heading">
+                <div>
+                    <p class="section-kicker">Inventory health</p>
+                    <h2>Device status</h2>
+                </div>
+            </div>
+            <div class="chart-frame"><canvas id="statusChart"></canvas></div>
+        </div>
+    </section>
 
-<div class="dashboard-bottom">
-    <div class="table-card">
-        <h3>Live Device List</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>IP</th>
-                    <th>Status</th>
-                    <th>MAC</th>
-                    <th>Manufacturer</th>
-                    <th>Last Seen</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody id="deviceTable"></tbody>
-        </table>
-    </div>
+    <section class="panel">
+        <div class="section-heading rule-panel-heading">
+            <div>
+                <p class="section-kicker">Detection policy</p>
+                <h2>Custom IDS rules</h2>
+                <p class="chart-note">Choose an event, measure, grouping key, filters, and threshold.</p>
+            </div>
+            <button id="createIdsRule" class="capture-button" type="button">Create rule</button>
+        </div>
+        <div class="table-scroll">
+            <table class="rules-table">
+                <thead>
+                    <tr>
+                        <th>Rule</th>
+                        <th>Event</th>
+                        <th>Metric / group</th>
+                        <th>Threshold</th>
+                        <th>Window</th>
+                        <th>Filters</th>
+                        <th>ATT&amp;CK</th>
+                        <th>Severity</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="idsRuleTable"></tbody>
+            </table>
+        </div>
+    </section>
 
-    <div class="table-card info-table">
-        <h3>Summary Metrics</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>Metric</th>
-                    <th>Value</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>Total Devices</td>
-                    <td id="summaryTotal">0</td>
-                </tr>
-                <tr>
-                    <td>Unique Devices</td>
-                    <td id="uniqueDevices">0</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
+    <section class="panel">
+        <div class="section-heading alert-panel-heading">
+            <div>
+                <p class="section-kicker">Detection</p>
+                <h2>IDS alerts</h2>
+            </div>
+            <div class="alert-tools">
+                <label for="alertSeverityFilter">Severity</label>
+                <select id="alertSeverityFilter">
+                    <option value="all">All severities</option>
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                </select>
+                <button id="clearAlerts" class="clear-alerts-button" type="button">Clear all</button>
+            </div>
+        </div>
+        <div class="table-scroll">
+            <table class="alerts-table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Severity</th>
+                        <th>Detection / ATT&amp;CK</th>
+                        <th>Source</th>
+                        <th>Target</th>
+                        <th>Brief summary</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="idsAlertTable"></tbody>
+            </table>
+        </div>
+    </section>
 
-    <div class="table-card hidden-devices-card" id="hiddenDevicesCard">
+    <section class="panel">
+        <div class="section-heading">
+            <div>
+                <p class="section-kicker">Network inventory</p>
+                <h2>Live devices</h2>
+            </div>
+            <span class="panel-meta">Discovered on the selected LAN</span>
+        </div>
+        <div class="table-scroll">
+            <table class="devices-table">
+                <thead>
+                    <tr>
+                        <th>IP address</th>
+                        <th>Status</th>
+                        <th>MAC address</th>
+                        <th>Manufacturer</th>
+                        <th>Last seen</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="deviceTable"></tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="panel hidden-devices-card" id="hiddenDevicesCard">
         <div class="card-header">
-            <h3>Hidden Devices</h3>
+            <div class="section-heading">
+                <div>
+                    <p class="section-kicker">Filtered inventory</p>
+                    <h2>Hidden devices</h2>
+                </div>
+            </div>
             <button class="toggle-hidden-button" id="toggleHiddenDevices">Show hidden devices</button>
         </div>
         <div class="hidden-content" id="hiddenDevicesContent">
-            <table>
+            <table class="hidden-table">
                 <thead>
                     <tr>
-                        <th>IP</th>
+                        <th>IP address</th>
                         <th>Status</th>
-                        <th>MAC</th>
+                        <th>MAC address</th>
                         <th>Manufacturer</th>
-                        <th>Last Seen</th>
+                        <th>Last seen</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody id="hiddenDeviceTable"></tbody>
             </table>
         </div>
+    </section>
+
+    <footer class="page-footer">
+        <span>Network discovery and passive traffic monitoring</span>
+        <span>Traffic spikes are indicators, not attack confirmation</span>
+    </footer>
+</main>
+
+<dialog id="idsRuleDialog" class="alert-dialog rule-dialog" aria-labelledby="idsRuleDialogTitle">
+    <form id="idsRuleForm">
+        <div class="dialog-header">
+            <div>
+                <p class="section-kicker">Detection policy</p>
+                <h2 id="idsRuleDialogTitle">Create IDS rule</h2>
+            </div>
+            <button id="closeIdsRuleDialog" class="dialog-close-button" type="button">Close</button>
+        </div>
+        <div class="rule-form-grid">
+            <label>Rule name
+                <input name="name" type="text" maxlength="60" required autocomplete="off" placeholder="Example: Watch web probes">
+            </label>
+            <label>Condition
+                <select name="rule_type" id="idsRuleType">
+                    <option value="packet_burst">Packet burst from one source</option>
+                    <option value="port_scan">Port scan</option>
+                    <option value="ping_activity">Ping activity</option>
+                    <option value="ping_sweep">Ping sweep</option>
+                    <option value="arp_sweep">ARP sweep</option>
+                    <option value="syn_scan">TCP SYN scan</option>
+                    <option value="target_flood">Target-centric flood</option>
+                    <option value="new_device">New device appears on network</option>
+                </select>
+            </label>
+            <label class="rule-metric-field">Measure
+                <select name="metric" id="idsRuleMetric">
+                    <option value="count">Packet count</option>
+                </select>
+            </label>
+            <label class="rule-group-field">Group by
+                <select name="group_by" id="idsRuleGroup">
+                    <option value="source_ip">Source IP</option>
+                    <option value="destination_ip">Destination IP</option>
+                </select>
+            </label>
+            <label class="rule-threshold-field"><span id="idsRuleThresholdLabel">Packet threshold</span>
+                <input name="threshold" type="number" min="2" max="10000000" value="250" required>
+            </label>
+            <label class="rule-window-field">Window (seconds)
+                <input name="window_seconds" type="number" min="1" max="3600" value="10" required>
+            </label>
+            <label class="rule-protocol-field">Protocol
+                <select name="protocol">
+                    <option value="ANY">Any</option>
+                    <option value="TCP">TCP</option>
+                    <option value="UDP">UDP</option>
+                    <option value="ICMP">ICMP</option>
+                    <option value="ARP">ARP</option>
+                </select>
+            </label>
+            <label>Severity
+                <select name="severity">
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="low">Low</option>
+                </select>
+            </label>
+            <label class="rule-source-field">Source IP filter <span>(optional)</span>
+                <input name="source_ip" type="text" inputmode="decimal" placeholder="Any source">
+            </label>
+            <label class="rule-destination-field">Destination IP filter <span>(optional)</span>
+                <input name="destination_ip" type="text" inputmode="decimal" placeholder="Any destination">
+            </label>
+            <label class="rule-min-sources-field">Minimum distinct sources
+                <input name="min_sources" type="number" min="1" max="10000" value="1">
+            </label>
+            <label>MITRE ATT&amp;CK technique <span>(optional)</span>
+                <input name="mitre_id" id="idsRuleMitreId" type="text" placeholder="Example: T1046">
+            </label>
+            <label class="rule-enabled-field">
+                <input name="enabled" type="checkbox" checked>
+                Enable rule after saving
+            </label>
+        </div>
+        <p id="idsRuleTypeHelp" class="rule-type-help">Alert when one source sends enough packets within the selected window.</p>
+        <p id="idsRuleFormError" class="rule-form-error" role="status"></p>
+        <div class="rule-form-actions">
+            <button class="dialog-close-button" type="button" id="cancelIdsRule">Cancel</button>
+            <button class="capture-button" type="submit">Save rule</button>
+        </div>
+    </form>
+</dialog>
+
+<dialog id="alertDetailsDialog" class="alert-dialog" aria-labelledby="alertDetailsTitle">
+    <div class="dialog-header">
+        <div>
+            <p class="section-kicker">Alert details</p>
+            <h2 id="alertDetailsTitle">Detection</h2>
+        </div>
+        <button id="closeAlertDetails" class="dialog-close-button" type="button">Close</button>
     </div>
-</div>
+    <dl class="alert-detail-meta">
+        <div><dt>Severity</dt><dd id="alertDetailsSeverity"></dd></div>
+        <div><dt>Source</dt><dd id="alertDetailsSource"></dd></div>
+        <div><dt>Target</dt><dd id="alertDetailsTarget"></dd></div>
+        <div><dt>ATT&amp;CK</dt><dd id="alertDetailsMitre"></dd></div>
+        <div><dt>Time</dt><dd id="alertDetailsTime"></dd></div>
+    </dl>
+    <section class="alert-detail-section">
+        <h3>Brief summary</h3>
+        <p id="alertDetailsSummary"></p>
+    </section>
+    <section class="alert-detail-section">
+        <h3>Full description</h3>
+        <p id="alertDetailsDescription"></p>
+    </section>
+</dialog>
 
 <script src="{{url_for('static', filename='chart.js')}}"></script>
-<div style="margin:12px 0;padding:8px;background:#fff;border:1px solid #e2e5ea;border-radius:6px;">
-    <strong>SSE Debug:</strong>
-    <pre id="debugSSE" style="max-height:160px;overflow:auto;margin:8px 0;font-size:12px;color:#111;white-space:pre-wrap;word-break:break-word;max-width:100%;"></pre>
-</div>
 <script src = "{{url_for('static', filename='app.js')}}"></script>
 
 </body>

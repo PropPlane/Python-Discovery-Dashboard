@@ -1,16 +1,28 @@
+import ipaddress
+import socket
 import sqlite3
+import psutil
 from scapy.all import ARP, Ether, srp
 
 
-def scan_network(host):
-    target = f"{host}/24"
+def _scan_target(host, iface):
+    if iface:
+        for addr in psutil.net_if_addrs().get(iface, []):
+            if (addr.family == socket.AF_INET and addr.address == host
+                    and addr.netmask):
+                return str(ipaddress.ip_network(f"{host}/{addr.netmask}", strict=False))
+    return f"{host}/24"
+
+
+def scan_network(host, iface=None):
+    target = _scan_target(host, iface)
 
     arp = ARP(pdst=target)
     ether = Ether(dst="ff:ff:ff:ff:ff:ff")
     packet = ether / arp
 
     try:
-        result = srp(packet, timeout=2, verbose=0)[0]
+        result = srp(packet, iface=iface, timeout=2, verbose=0)[0]
     except PermissionError as e:
         raise PermissionError(
             "Raw socket access denied. Run this script with elevated privileges "
