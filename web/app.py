@@ -7,15 +7,12 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from database.db import (
-    add_ids_alert_exemption,
     delete_all_ids_alerts,
     delete_ids_alert,
-    delete_ids_alert_exemption,
     create_ids_rule,
     delete_ids_rule,
     get_all_devices,
     get_ids_rules,
-    get_ids_alert_exemptions,
     get_recent_ids_alerts,
     get_recent_packet_counts,
     record_packet_count,

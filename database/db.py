@@ -32,19 +32,6 @@ def init_db():
     """)
 
     cur.execute("""
-    CREATE TABLE IF NOT EXISTS ids_alerts (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        alert_type TEXT NOT NULL,
-        severity TEXT NOT NULL,
-        source_ip TEXT,
-        destination_ip TEXT,
-        description TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        mitre_id TEXT
-    )
-    """)
-
-    cur.execute("""
     CREATE TABLE IF NOT EXISTS ids_rules (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL UNIQUE,
@@ -114,31 +101,6 @@ def init_db():
         "UPDATE ids_rules SET mitre_id='T1046' "
         "WHERE rule_type='port_scan' AND mitre_id IS NULL"
     )
-
-    legacy_custom_exemptions = cur.execute(
-        "SELECT id, device_ip, alert_type FROM ids_alert_exemptions "
-        "WHERE alert_type = 'Custom rule' OR alert_type LIKE 'Custom rule: %'"
-    ).fetchall()
-    for exemption_id, device_ip, alert_type in legacy_custom_exemptions:
-        if alert_type == "Custom rule":
-            matching_rules = cur.execute("SELECT id, excluded_ips FROM ids_rules").fetchall()
-        else:
-            rule_name = alert_type.removeprefix("Custom rule: ").strip()
-            matching_rules = cur.execute(
-                "SELECT id, excluded_ips FROM ids_rules WHERE name = ?", (rule_name,)
-            ).fetchall()
-        for rule_id, excluded_json in matching_rules:
-            try:
-                excluded_ips = json.loads(excluded_json or "[]")
-            except (TypeError, json.JSONDecodeError):
-                excluded_ips = []
-            if device_ip not in excluded_ips:
-                excluded_ips.append(device_ip)
-                cur.execute(
-                    "UPDATE ids_rules SET excluded_ips = ? WHERE id = ?",
-                    (json.dumps(excluded_ips), rule_id),
-                )
-        cur.execute("DELETE FROM ids_alert_exemptions WHERE id = ?", (exemption_id,))
     
     cur.execute("PRAGMA table_info(logs)")
     existing_columns = [row[1] for row in cur.fetchall()]
@@ -471,58 +433,6 @@ def delete_all_ids_alerts():
     deleted_count = cur.rowcount
     con.close()
     return deleted_count
-
-
-def add_ids_alert_exemption(device_ip, alert_type="*"):
-    device_ip = str(device_ip or "").strip()
-    alert_type = str(alert_type or "*").strip()
-    try:
-        if ipaddress.ip_address(device_ip).version != 4:
-            raise ValueError
-    except ValueError as error:
-        raise ValueError("Device IP must be a valid IPv4 address.") from error
-    builtin_alert_types = {"*", "Port scan", "Packet burst", "Conflicting ARP claim"}
-    if alert_type not in builtin_alert_types:
-        raise ValueError("Choose a valid alert type.")
-
-    init_db()
-    con = sqlite3.connect(DB_PATH)
-    con.execute(
-        "INSERT OR IGNORE INTO ids_alert_exemptions (device_ip, alert_type, created_at) "
-        "VALUES (?, ?, ?)",
-        (device_ip, alert_type, datetime.now().astimezone().isoformat(timespec="seconds")),
-    )
-    con.commit()
-    row = con.execute(
-        "SELECT id, device_ip, alert_type, created_at FROM ids_alert_exemptions "
-        "WHERE device_ip = ? AND alert_type = ?",
-        (device_ip, alert_type),
-    ).fetchone()
-    con.close()
-    return {"id": row[0], "device_ip": row[1], "alert_type": row[2], "created_at": row[3]}
-
-
-def get_ids_alert_exemptions():
-    init_db()
-    con = sqlite3.connect(DB_PATH)
-    con.row_factory = sqlite3.Row
-    rows = con.execute(
-        "SELECT id, device_ip, alert_type, created_at "
-        "FROM ids_alert_exemptions ORDER BY device_ip, alert_type"
-    ).fetchall()
-    con.close()
-    return [dict(row) for row in rows]
-
-
-def delete_ids_alert_exemption(exemption_id):
-    init_db()
-    con = sqlite3.connect(DB_PATH)
-    cur = con.execute("DELETE FROM ids_alert_exemptions WHERE id = ?", (int(exemption_id),))
-    con.commit()
-    deleted = cur.rowcount > 0
-    con.close()
-    return deleted
-
 
 def is_ids_alert_exempt(alert, exemptions):
     alert_type = alert.get("alert_type", "")
