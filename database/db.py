@@ -449,6 +449,105 @@ def is_ids_alert_exempt(alert, exemptions):
     )
 
 
+def get_ids_alert_exemptions():
+    """Return all configured IDS alert exemptions."""
+    init_db()
+
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+
+    rows = con.execute(
+        """
+        SELECT id, device_ip, alert_type, created_at
+        FROM ids_alert_exemptions
+        ORDER BY id DESC
+        """
+    ).fetchall()
+
+    con.close()
+    return [dict(row) for row in rows]
+
+
+def add_ids_alert_exemption(device_ip, alert_type="*"):
+    """Add an exemption for a device and alert type."""
+    device_ip = str(device_ip or "").strip()
+    alert_type = str(alert_type or "*").strip()
+
+    if not device_ip:
+        raise ValueError("Device IP is required.")
+
+    try:
+        if ipaddress.ip_address(device_ip).version != 4:
+            raise ValueError
+    except ValueError as error:
+        raise ValueError("Device IP must be a valid IPv4 address.") from error
+
+    if not alert_type:
+        alert_type = "*"
+
+    if len(alert_type) > 100:
+        raise ValueError("Alert type must be 100 characters or fewer.")
+
+    init_db()
+    created_at = datetime.now().astimezone().isoformat(timespec="seconds")
+
+    con = sqlite3.connect(DB_PATH)
+
+    try:
+        cur = con.execute(
+            """
+            INSERT INTO ids_alert_exemptions
+                (device_ip, alert_type, created_at)
+            VALUES (?, ?, ?)
+            """,
+            (device_ip, alert_type, created_at),
+        )
+        exemption_id = cur.lastrowid
+        con.commit()
+
+        row = con.execute(
+            """
+            SELECT id, device_ip, alert_type, created_at
+            FROM ids_alert_exemptions
+            WHERE id = ?
+            """,
+            (exemption_id,),
+        ).fetchone()
+
+        return {
+            "id": row[0],
+            "device_ip": row[1],
+            "alert_type": row[2],
+            "created_at": row[3],
+        }
+
+    except sqlite3.IntegrityError as error:
+        con.rollback()
+        raise ValueError(
+            "An exemption for this device and alert type already exists."
+        ) from error
+
+    finally:
+        con.close()
+
+
+def delete_ids_alert_exemption(exemption_id):
+    """Delete an exemption by its database ID."""
+    init_db()
+
+    con = sqlite3.connect(DB_PATH)
+
+    try:
+        cur = con.execute(
+            "DELETE FROM ids_alert_exemptions WHERE id = ?",
+            (int(exemption_id),),
+        )
+        con.commit()
+        return cur.rowcount > 0
+    finally:
+        con.close()
+
+
 def _validate_ids_rule(data):
     if not isinstance(data, dict):
         raise ValueError("Rule data must be a JSON object.")
